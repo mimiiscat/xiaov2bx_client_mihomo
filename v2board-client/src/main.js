@@ -749,20 +749,27 @@ async function fetchPaymentMethods() {
 }
 
 async function createOrder({ plan_id, cycle, coupon_code, deposit_amount }) {
-  return apiRequest('POST', '/user/order/save', {
+  const payload = {
     plan_id,
+    planId: plan_id,
     cycle,
-    coupon_code,
-    deposit_amount,
-  }, authData)
+    period: cycle,
+  }
+  if (coupon_code) payload.coupon_code = coupon_code
+  if (deposit_amount !== undefined && deposit_amount !== null && deposit_amount !== '') {
+    payload.deposit_amount = deposit_amount
+  }
+  return apiRequest('POST', '/user/order/save', payload, authData)
 }
 
 async function checkoutOrder({ trade_no, method, token }) {
-  return apiRequest('POST', '/user/order/checkout', {
+  const payload = {
     trade_no,
+    tradeNo: trade_no,
     method,
-    token,
-  }, authData)
+  }
+  if (token !== undefined && token !== null && token !== '') payload.token = token
+  return apiRequest('POST', '/user/order/checkout', payload, authData)
 }
 
 async function doLogin(email, password) {

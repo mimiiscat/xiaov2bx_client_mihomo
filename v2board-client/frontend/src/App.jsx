@@ -97,10 +97,13 @@ function normalizePaymentMethods(payload) {
   const list = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : []
   return list.map((item, index) => {
     if (typeof item === 'string') {
-      return { id: item, name: item, payment: item }
+      return { id: index + 1, name: item, payment: item }
     }
+    const rawId = item?.id ?? item?.payment_id ?? item?.method_id ?? null
+    const numericId = Number(rawId)
     return {
-      id: item?.id ?? item?.payment ?? index,
+      id: Number.isFinite(numericId) && numericId > 0 ? numericId : index + 1,
+      rawId: rawId ?? item?.payment ?? item?.name ?? index + 1,
       name: item?.name || item?.payment || `支付方式 ${index + 1}`,
       payment: item?.payment || item?.name || '',
     }
@@ -275,7 +278,7 @@ function PurchaseModal({
             <div className="auth-actions" style={{ marginTop: 10 }}>
               {checkoutUrl && (
                 <button className="btn-secondary" onClick={() => onOpenExternal(checkoutUrl)}>
-                  打开支付页
+                  浏览器打开
                 </button>
               )}
               {checkoutValue && (
@@ -899,7 +902,7 @@ function Dashboard({ userInfo, onLogout }) {
 
       const checkoutRes = await electron.checkoutOrder?.({
         trade_no: tradeNo,
-        method: methodId,
+        method: Number(methodId),
       })
       const checkoutType = Number(checkoutRes?.type ?? (isLikelyUrl(checkoutRes?.data) ? 1 : 0))
       const checkoutValue = checkoutRes?.data?.data || checkoutRes?.data || ''
