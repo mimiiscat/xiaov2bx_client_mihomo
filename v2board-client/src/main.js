@@ -8,20 +8,26 @@ const http = require('http')
 const killPort = require('kill-port')
 const YAML = require('js-yaml')
 const { shell, clipboard } = require('electron')
+const APP_CONFIG_PATH = path.join(__dirname, '..', 'app.config.json')
 
 let win = null
 let tray = null
 let frontendServer = null
 let mihomoProcess = null
 let isProxyOn = false
-let serverUrl = 'https://api.dudog.club'
+let serverUrl = getRuntimeConfig().backend_api_url || 'https://api.dudog.club'
 let subscribeToken = ''
 let authData = ''
 let mihomoBinPath = ''
 let mihomoConfigPath = ''
 let selectedProxyName = ''
 const DEFAULT_MIXED_PORT = 7897
-const DEFAULT_DELAY_TEST_URL = 'http://www.gstatic.com/generate_204'
+const DEFAULT_DELAY_TEST_URL = 'https://cp.cloudflare.com/generate_204'
+const FALLBACK_DELAY_TEST_URLS = [
+  'https://cp.cloudflare.com/generate_204',
+  'https://www.google.com/generate_204',
+  'http://www.gstatic.com/generate_204',
+]
 let activeMixedPort = DEFAULT_MIXED_PORT
 let activeControllerPort = 0
 let trafficRequest = null
@@ -29,6 +35,31 @@ let trafficState = { up: 0, down: 0, uploadTotal: 0, downloadTotal: 0 }
 let activeProxyName = ''
 const MAIN_PROXY_GROUP = '🚀 节点选择'
 const FALLBACK_PROXY_GROUP = '🐟 漏网之鱼'
+
+function readAppConfig() {
+  try {
+    if (fs.existsSync(APP_CONFIG_PATH)) {
+      return JSON.parse(fs.readFileSync(APP_CONFIG_PATH, 'utf-8'))
+    }
+  } catch (e) {
+    console.error('[Config] Read app config error:', e.message)
+  }
+  return {
+    app_name: 'v2Board',
+    client_name: 'Mihomo',
+    app_version: '1.0.0',
+    app_id: 'com.v2board.client',
+    product_name: 'v2Board',
+    window_title: 'v2Board · Mihomo',
+    page_title: 'v2Board 客户端',
+    tray_tooltip: 'v2Board Client',
+    backend_api_url: 'https://api.dudog.club',
+  }
+}
+
+function getRuntimeConfig() {
+  return readAppConfig()
+}
 
 function getConfig(key, fallback = '') {
   try {
@@ -110,6 +141,7 @@ function buildBaseMihomoConfig() {
     'allow-lan': false,
     mode: 'rule',
     'log-level': 'warning',
+    'unified-delay': true,
     ipv6: true,
 
     tun: {
@@ -447,7 +479,7 @@ function startTrafficStream() {
   trafficRequest = req
 }
 
-function mihomoControllerRequest(method, pathname, body = null) {
+function mihomoControllerRequest(method, pathname, body = null, requestTimeout = 2000) {
   return new Promise((resolve, reject) => {
     if (!activeControllerPort) {
       reject(new Error('Mihomo controller is not ready'))
@@ -463,7 +495,7 @@ function mihomoControllerRequest(method, pathname, body = null) {
       headers: payload
         ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
         : undefined,
-      timeout: 2000,
+      timeout: requestTimeout,
     }, (res) => {
       let raw = ''
       res.setEncoding('utf8')
@@ -523,25 +555,70 @@ async function selectMihomoProxy(name) {
   }
 }
 
+async function measureDelayThroughMixedPort(testUrl, timeout = 5000) {
+  if (!isProxyOn || !activeMixedPort) return null
+  const axios = require('axios')
+  const start = Date.now()
+  try {
+    await axios.get(testUrl, {
+      timeout,
+      proxy: { protocol: 'http', host: '127.0.0.1', port: activeMixedPort },
+      responseType: 'text',
+      validateStatus: () => true,
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+    })
+    return Date.now() - start
+  } catch (err) {
+    console.error(`[Mihomo] Mixed-port delay test error (${testUrl}):`, err.message)
+    return null
+  }
+}
+
 async function fetchMihomoProxyDelay(name, testUrl = DEFAULT_DELAY_TEST_URL, timeout = 5000) {
   if (!name || !isProxyOn) return null
   try {
-    const result = await mihomoControllerRequest(
-      'GET',
-      `/proxies/${encodeURIComponent(name)}/delay?url=${encodeURIComponent(testUrl)}&timeout=${timeout}`,
-    )
-    const delay = Number(result?.delay)
-    return Number.isFinite(delay) && delay >= 0 ? delay : null
+    const urls = Array.isArray(testUrl)
+      ? testUrl.filter(Boolean)
+      : [testUrl, ...FALLBACK_DELAY_TEST_URLS].filter(Boolean)
+    const uniqueUrls = [...new Set(urls)]
+
+    for (const currentUrl of uniqueUrls) {
+      const delay = await measureDelayThroughMixedPort(currentUrl, timeout)
+      if (Number.isFinite(delay) && delay > 0) return delay
+    }
+
+    return null
   } catch (err) {
     console.error(`[Mihomo] Delay test error for ${name}:`, err.message)
     return null
   }
 }
 
-async function fetchMihomoProxyDelays(names, testUrl = DEFAULT_DELAY_TEST_URL, timeout = 5000) {
+async function fetchMihomoProxyDelays(names, testUrl = DEFAULT_DELAY_TEST_URL, timeout = 5000, activateBeforeTest = false) {
   const list = Array.isArray(names) ? names.filter(Boolean) : []
   if (!list.length) return {}
   const result = {}
+
+  if (activateBeforeTest && isProxyOn) {
+    const originalSelected = await getMihomoSelectedProxy()
+    try {
+      for (const current of list) {
+        await selectMihomoProxy(current)
+        await new Promise(resolve => setTimeout(resolve, 600))
+        result[current] = await fetchMihomoProxyDelay(current, testUrl, timeout)
+      }
+    } finally {
+      if (originalSelected && originalSelected !== (await getMihomoSelectedProxy())) {
+        await selectMihomoProxy(originalSelected)
+      }
+    }
+    return result
+  }
+
   const concurrency = 4
   let index = 0
 
@@ -801,6 +878,7 @@ async function doForgetPassword(email, password, emailCode) {
 // ─── Tray ──────────────────────────────────────────────────
 
 function createTray() {
+  const runtimeConfig = getRuntimeConfig()
   const assetsPath = path.join(__dirname, 'assets')
   const onIcon = path.join(assetsPath,
     process.platform === 'darwin' ? 'iconOn@2x.png' : 'iconOn.ico')
@@ -812,7 +890,7 @@ function createTray() {
   }
 
   tray = new Tray(nativeImage.createFromPath(getIcon()))
-  tray.setToolTip('v2Board Client')
+  tray.setToolTip(runtimeConfig.tray_tooltip || 'v2Board Client')
 
   function updateMenu() {
     const menu = Menu.buildFromTemplate([
@@ -858,6 +936,7 @@ function updateTrayIcon() {
 // ─── Browser Window ────────────────────────────────────────
 
 function createWindow() {
+  const runtimeConfig = getRuntimeConfig()
   win = new BrowserWindow({
     width: 400,
     height: 620,
@@ -865,6 +944,7 @@ function createWindow() {
     resizable: false,
     frame: false,
     maximizable: false,
+    title: runtimeConfig.window_title || 'v2Board · Mihomo',
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       devTools: !app.isPackaged,
@@ -937,11 +1017,12 @@ function setupIPC() {
   ipcMain.handle('fetch-subscribe', async () => fetchSubscription(authData))
   ipcMain.handle('fetch-plans', async () => fetchPlans(authData))
   ipcMain.handle('fetch-servers', async () => fetchServers(authData))
-  ipcMain.handle('fetch-server-delays', async (_, names, testUrl, timeout) => {
-    return fetchMihomoProxyDelays(names, testUrl, timeout)
+  ipcMain.handle('fetch-server-delays', async (_, names, testUrl, timeout, activateBeforeTest = false) => {
+    return fetchMihomoProxyDelays(names, testUrl, timeout, activateBeforeTest)
   })
   ipcMain.handle('fetch-stat', async () => fetchStat(authData))
   ipcMain.handle('fetch-guest-config', async () => fetchGuestConfig())
+  ipcMain.handle('get-app-config', async () => getRuntimeConfig())
   ipcMain.handle('send-email-verify', async (_, email, isforget) => sendEmailVerify(email, isforget))
   ipcMain.handle('forget-password', async (_, email, password, emailCode) => doForgetPassword(email, password, emailCode))
   ipcMain.handle('check-coupon', async (_, code, planId) => checkCoupon(code, planId))
@@ -1022,7 +1103,8 @@ function setupIPC() {
 // ─── Init ──────────────────────────────────────────────────
 
 function init() {
-  serverUrl = getConfig('serverUrl', serverUrl)
+  const runtimeConfig = getRuntimeConfig()
+  serverUrl = getConfig('serverUrl', runtimeConfig.backend_api_url || serverUrl)
 
   const savedToken = getConfig('v2board_token', '')
   if (savedToken) subscribeToken = savedToken

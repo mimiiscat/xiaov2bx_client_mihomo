@@ -1,0 +1,11 @@
+{
+  "app_name": "Netch加速",
+  "client_name": "Netch加速",
+  "app_version": "1.0.0",
+  "app_id": "com.v2board.client",
+  "product_name": "Netch加速",
+  "window_title": "Netch加速",
+  "page_title": "Netch加速 客户端",
+  "tray_tooltip": "Netch加速 Client",
+  "backend_api_url": "http://43.139.138.166:33881"
+}

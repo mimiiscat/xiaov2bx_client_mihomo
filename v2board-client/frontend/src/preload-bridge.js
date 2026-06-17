@@ -25,8 +25,8 @@ window.electronAPI = {
     if (window.__ELECTRON__) return window.__ELECTRON__.fetchServers()
     return Promise.resolve(null)
   },
-  fetchServerDelays: (names, testUrl, timeout) => {
-    if (window.__ELECTRON__) return window.__ELECTRON__.fetchServerDelays(names, testUrl, timeout)
+  fetchServerDelays: (names, testUrl, timeout, activateBeforeTest = false) => {
+    if (window.__ELECTRON__) return window.__ELECTRON__.fetchServerDelays(names, testUrl, timeout, activateBeforeTest)
     return Promise.resolve({})
   },
   fetchStat: () => {
@@ -36,6 +36,10 @@ window.electronAPI = {
   fetchGuestConfig: () => {
     if (window.__ELECTRON__) return window.__ELECTRON__.fetchGuestConfig()
     return Promise.resolve(null)
+  },
+  getAppConfig: () => {
+    if (window.__ELECTRON__) return window.__ELECTRON__.getAppConfig()
+    return Promise.resolve({})
   },
   toggleProxy: () => {
     if (window.__ELECTRON__) return window.__ELECTRON__.toggleProxy()

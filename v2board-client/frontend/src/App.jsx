@@ -27,13 +27,13 @@ function formatCurrencyCents(amount) {
 
 function formatLatency(value) {
   const delay = Number(value)
-  if (!Number.isFinite(delay) || delay < 0) return '超时'
+  if (!Number.isFinite(delay) || delay <= 0) return '超时'
   return `${Math.round(delay)} ms`
 }
 
 function latencyColor(value) {
   const delay = Number(value)
-  if (!Number.isFinite(delay) || delay < 0) return '#ff6b6b'
+  if (!Number.isFinite(delay) || delay <= 0) return '#ff6b6b'
   if (delay < 200) return '#51cf66'
   if (delay < 500) return '#ffd43b'
   return '#ff922b'
@@ -435,6 +435,7 @@ function App() {
 
 function AppContent() {
   const [userInfo, setUserInfo] = useState(null)
+  const [appConfig, setAppConfig] = useState(null)
   
   useEffect(() => {
     const restoreSession = async () => {
@@ -450,7 +451,15 @@ function AppContent() {
       if (u) setUserInfo(JSON.parse(u))
     }
 
+    const loadConfig = async () => {
+      try {
+        const cfg = await getElectron().getAppConfig?.()
+        if (cfg && typeof cfg === 'object') setAppConfig(cfg)
+      } catch {}
+    }
+
     restoreSession()
+    loadConfig()
   }, [])
 
   const handleLoginSuccess = async (loginData) => {
@@ -477,14 +486,16 @@ function AppContent() {
     <div className="app">
       <div className="drag-bar" />
       <div className="header">
-        <span className="header-title">v2Board · Mihomo</span>
+        <span className="header-title">
+          {appConfig?.window_title || `${appConfig?.app_name || 'v2Board'} · ${appConfig?.client_name || 'Mihomo'}`}
+        </span>
         <button className="close-btn" onClick={() => getElectron().quit?.()}>✕</button>
       </div>
       <div className="content">
         {!userInfo ? (
-          <LoginPage onLoginSuccess={handleLoginSuccess} />
+          <LoginPage appConfig={appConfig} onLoginSuccess={handleLoginSuccess} />
         ) : (
-          <Dashboard userInfo={userInfo} onLogout={handleLogout} />
+          <Dashboard userInfo={userInfo} appConfig={appConfig} onLogout={handleLogout} />
         )}
       </div>
     </div>
@@ -492,7 +503,7 @@ function AppContent() {
 }
 
 // ─── Login Page ────────────────────────────────────────────
-function LoginPage({ onLoginSuccess }) {
+function LoginPage({ onLoginSuccess, appConfig }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [inviteCode, setInviteCode] = useState('')
@@ -629,7 +640,7 @@ function LoginPage({ onLoginSuccess }) {
   return (
     <div>
       <div className="logo-icon">🌐</div>
-      <div className="page-title">v2Board 客户端</div>
+      <div className="page-title">{appConfig?.page_title || `${appConfig?.app_name || 'v2Board'} 客户端`}</div>
       <div className="page-sub">
         {isForgot ? '通过邮箱验证码找回密码' : isRegister ? (loadingConfig ? '正在检查邮箱验证配置…' : emailVerifyEnabled ? '创建新账户，需要邮箱验证码' : '创建新账户') : '登录你的账户'}
       </div>
@@ -712,13 +723,16 @@ function LoginPage({ onLoginSuccess }) {
 }
 
 // ─── Dashboard ─────────────────────────────────────────────
-function Dashboard({ userInfo, onLogout }) {
+function Dashboard({ userInfo, onLogout, appConfig }) {
+  const delayTestUrl = ['https://cp.cloudflare.com/generate_204', 'https://www.google.com/generate_204', 'http://www.gstatic.com/generate_204']
+  const delayTestTimeout = 10000
   const [activeTab, setActiveTab] = useState('overview')
   const [proxyOn, setProxyOn] = useState(false)
   const [loading, setLoading] = useState(false)
   const [plans, setPlans] = useState([])
 		  const [servers, setServers] = useState([])
 		  const [serverDelays, setServerDelays] = useState({})
+		  const [testingDelays, setTestingDelays] = useState(false)
 		  const [selectedServer, setSelectedServer] = useState('')
 		  const [activeServer, setActiveServer] = useState('')
 		  const [traffic, setTraffic] = useState({ up: 0, down: 0, uploadTotal: 0, downloadTotal: 0 })
@@ -780,6 +794,7 @@ function Dashboard({ userInfo, onLogout }) {
 	  const handleRefresh = async (action, setter) => {
 	    try {
 	      const electron = getElectron()
+	      if (action === 'fetchServers') setServerDelays({})
 	      const res = await electron[action]()
 	      if (res?.data) {
 	        setter(res.data)
@@ -793,7 +808,7 @@ function Dashboard({ userInfo, onLogout }) {
 	        if (action === 'fetchServers') {
 	          const names = Array.isArray(res.data) ? res.data.map(s => s?.name).filter(Boolean) : []
 	          if (names.length) {
-	            const delays = await electron.fetchServerDelays?.(names, 'http://www.gstatic.com/generate_204', 5000)
+	            const delays = await electron.fetchServerDelays?.(names, delayTestUrl, delayTestTimeout, true)
 	            if (delays && typeof delays === 'object') setServerDelays(delays)
 	          } else {
 	            setServerDelays({})
@@ -829,6 +844,28 @@ function Dashboard({ userInfo, onLogout }) {
 	    if (result?.proxyOn !== undefined) setProxyOn(result.proxyOn)
 	    setActiveServer(result?.activeProxyName || '')
 	    if (result?.proxyOn && result?.switched === false) setMsg('节点已保存，但 Mihomo 暂时没有切换成功，请重新开启代理')
+	    try {
+	      const electron = getElectron()
+	      const delays = await electron.fetchServerDelays?.([server.name], delayTestUrl, delayTestTimeout, false)
+	      if (delays && typeof delays === 'object') {
+	        setServerDelays((prev) => ({ ...prev, ...delays }))
+	      }
+	    } catch {}
+	  }
+
+	  const handleTestDelays = async () => {
+	    const names = Array.isArray(servers) ? servers.map((s) => s?.name).filter(Boolean) : []
+	    if (!names.length) return
+	    setMsg('')
+	    setTestingDelays(true)
+	    try {
+	      const electron = getElectron()
+	      const delays = await electron.fetchServerDelays?.(names, delayTestUrl, delayTestTimeout, true)
+	      if (delays && typeof delays === 'object') {
+	        setServerDelays(delays)
+	      }
+	    } catch {}
+	    setTestingDelays(false)
 	  }
 
   const openPurchase = async (plan) => {
@@ -924,7 +961,13 @@ function Dashboard({ userInfo, onLogout }) {
 	  const trafficTotal = data ? (data.transfer_enable || 0) : 0
 	  const percent = trafficTotal > 0 ? Math.round((trafficUsed / trafficTotal) * 100) : 0
 	  const sessionTraffic = (traffic.uploadTotal || 0) + (traffic.downloadTotal || 0)
-	  const expiredAt = data?.expired_at ? new Date(data.expired_at * 1000).toLocaleDateString('zh-CN') : '—'
+	  const expiredAt = (() => {
+	    const value = data?.expired_at
+	    if (value === null || value === undefined || value === '' || value === '—' || value === '--') return '永久'
+	    const date = new Date(Number(value) * 1000)
+	    if (Number.isNaN(date.getTime())) return '永久'
+	    return date.toLocaleDateString('zh-CN')
+	  })()
 
   const tabs = [
     { key: 'overview', label: '概览' },
@@ -1061,7 +1104,12 @@ function Dashboard({ userInfo, onLogout }) {
       {/* Tab: Servers */}
 	      {activeTab === 'servers' && (
 	        <div className="card">
-	          <button className="btn-small" style={{ marginBottom: 12 }} onClick={() => handleRefresh('fetchServers', setServers)}>🔄 刷新</button>
+	          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+	            <button className="btn-small" onClick={() => handleRefresh('fetchServers', setServers)}>🔄 刷新</button>
+	            <button className="btn-small" onClick={handleTestDelays} disabled={testingDelays || servers.length === 0}>
+	              {testingDelays ? '⏳ 测速中' : '⚡ 手动测速'}
+	            </button>
+	          </div>
 	          {servers.length > 0 ? (
 	            <div className="server-list">
 	              {servers.map((s, i) => (
