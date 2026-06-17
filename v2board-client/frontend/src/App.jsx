@@ -240,6 +240,17 @@ function LoginPage({ onLoginSuccess }) {
     setLoadingCode(false)
   }
 
+  const isSuccessfulForgetResponse = (resp) => {
+    if (!resp) return false
+    if (resp.success === true) return true
+    if (resp.success === false) return false
+    if (resp.errors) return false
+    if (resp.data !== undefined && resp.data !== null) return true
+    const message = String(resp.message || resp.error || '').toLowerCase()
+    if (/invalid|错误|失败|验证码|password|email/.test(message)) return false
+    return false
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -254,12 +265,12 @@ function LoginPage({ onLoginSuccess }) {
           return
         }
         result = await electron.forgetPassword?.(email, password, emailCode.trim())
-        if (result?.errors) {
-          setMsg(result?.message || '找回密码失败')
-        } else {
+        if (isSuccessfulForgetResponse(result)) {
           setMsg('修改成功，请返回登录')
           setPassword('')
           setEmailCode('')
+        } else {
+          setMsg(result?.message || result?.error || '找回密码失败')
         }
       } else if (isRegister) {
         if (emailVerifyEnabled && !emailCode.trim()) {
