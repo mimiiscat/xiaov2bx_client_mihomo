@@ -7,7 +7,18 @@ const { main: prepareMihomo } = require('./prepare-mihomo')
 const ROOT_DIR = path.resolve(__dirname, '..')
 
 function run(command, args, env = {}) {
-  const result = spawnSync(command, args, {
+  const isWindows = process.platform === 'win32'
+  const execCommand = isWindows && (command === 'npm.cmd' || command === 'npx.cmd')
+    ? 'cmd.exe'
+    : command
+  const execArgs = isWindows && (command === 'npm.cmd' || command === 'npx.cmd')
+    ? ['/d', '/s', '/c', [command, ...args].map((part) => {
+        const value = String(part)
+        return /\s|"/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value
+      }).join(' ')]
+    : args
+
+  const result = spawnSync(execCommand, execArgs, {
     cwd: ROOT_DIR,
     stdio: 'inherit',
     env: {

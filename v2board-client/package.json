@@ -6,8 +6,8 @@
   "license": "MIT",
   "description": "v2Board Mihomo Desktop Client",
   "scripts": {
-    "start": "electron .",
-    "dev": "concurrently \"cd frontend && npm run dev\" \"wait-on http://localhost:9000 && electron .\"",
+    "start": "node scripts/run-electron.js .",
+    "dev": "concurrently \"cd frontend && npm run dev\" \"wait-on http://localhost:9000 && node scripts/run-electron.js .\"",
     "build:frontend": "cd frontend && npm run build",
     "prepare:libs": "node scripts/prepare-mihomo.js",
     "build": "node scripts/build.js",

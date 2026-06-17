@@ -49,6 +49,7 @@ module.exports = {
   win: {
     icon: 'res/icon.ico',
     target: ['nsis'],
+    signAndEditExecutable: false,
   },
   nsis: {
     oneClick: false,

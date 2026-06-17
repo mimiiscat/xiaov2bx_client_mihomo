@@ -5,7 +5,10 @@ v2board-client/node_modules/
 v2board-client/frontend/node_modules/
 v2board-client/dist-electron/
 v2board-client/src/dist/
+v2board-client/frontend/dist/
 v2board-client/libs/darwin-arm64/config.yaml
 v2board-client/libs/darwin-x64/config.yaml
 v2board-client/libs/win32-x64/config.yaml
+
+*.log
 
