@@ -35,7 +35,7 @@ function getPlanPrice(plan) {
   for (const [key, label] of candidates) {
     const value = plan?.[key]
     if (value !== null && value !== undefined && value !== '' && Number(value) > 0) {
-      return { value: Number(value), label }
+      return { value: Number(value) / 100, label }
     }
   }
 
