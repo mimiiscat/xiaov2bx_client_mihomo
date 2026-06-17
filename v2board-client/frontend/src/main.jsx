@@ -12,6 +12,7 @@ if (typeof process !== 'undefined' && process.versions?.electron) {
     fetchSubscribe: () => window.require('electron').ipcRenderer.invoke('fetch-subscribe'),
     fetchPlans: () => window.require('electron').ipcRenderer.invoke('fetch-plans'),
     fetchServers: () => window.require('electron').ipcRenderer.invoke('fetch-servers'),
+    reloadServers: () => window.require('electron').ipcRenderer.invoke('reload-servers'),
     fetchServerDelays: (names, testUrl, timeout, activateBeforeTest = false) =>
       window.require('electron').ipcRenderer.invoke('fetch-server-delays', names, testUrl, timeout, activateBeforeTest),
     fetchStat: () => window.require('electron').ipcRenderer.invoke('fetch-stat'),

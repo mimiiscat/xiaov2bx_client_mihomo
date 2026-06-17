@@ -418,6 +418,22 @@ async function buildMihomoConfig() {
   return applySubscriptionConfig(baseConfig, subscriptionConfig)
 }
 
+async function reloadMihomoConfiguration() {
+  const config = await buildMihomoConfig()
+  if (config?.proxies?.length) {
+    writeMihomoConfig(config)
+  }
+
+  if (isProxyOn) {
+    const preservedSelected = selectedProxyName
+    stopMihomo()
+    selectedProxyName = preservedSelected
+    return startMihomo()
+  }
+
+  return !!config?.proxies?.length
+}
+
 function writeMihomoConfig(config) {
   if (!mihomoConfigPath) {
     const libsPath = getLibsPath()
@@ -557,21 +573,35 @@ async function selectMihomoProxy(name) {
 
 async function measureDelayThroughMixedPort(testUrl, timeout = 5000) {
   if (!isProxyOn || !activeMixedPort) return null
-  const axios = require('axios')
-  const start = Date.now()
+  const curlBinary = process.platform === 'win32' ? 'curl.exe' : 'curl'
+  const timeoutSeconds = Math.max(3, Math.ceil(timeout / 1000))
   try {
-    await axios.get(testUrl, {
-      timeout,
-      proxy: { protocol: 'http', host: '127.0.0.1', port: activeMixedPort },
-      responseType: 'text',
-      validateStatus: () => true,
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Cache-Control': 'no-cache',
-        Pragma: 'no-cache',
-      },
-    })
-    return Date.now() - start
+    const args = [
+      '--silent',
+      '--show-error',
+      '--location',
+      '--output',
+      process.platform === 'win32' ? 'NUL' : '/dev/null',
+      '--proxy',
+      `http://127.0.0.1:${activeMixedPort}`,
+      '--connect-timeout',
+      String(timeoutSeconds),
+      '--max-time',
+      String(timeoutSeconds),
+      '--write-out',
+      '%{time_total}',
+      testUrl,
+    ]
+    const { error, stdout, stderr } = await execFilePromise(curlBinary, args)
+    if (error) {
+      console.error(`[Mihomo] Mixed-port delay test error (${testUrl}):`, (stderr || error.message || '').trim())
+      return null
+    }
+    const totalSeconds = Number(String(stdout || '').trim())
+    if (Number.isFinite(totalSeconds) && totalSeconds > 0) {
+      return Math.round(totalSeconds * 1000)
+    }
+    return null
   } catch (err) {
     console.error(`[Mihomo] Mixed-port delay test error (${testUrl}):`, err.message)
     return null
@@ -1017,6 +1047,11 @@ function setupIPC() {
   ipcMain.handle('fetch-subscribe', async () => fetchSubscription(authData))
   ipcMain.handle('fetch-plans', async () => fetchPlans(authData))
   ipcMain.handle('fetch-servers', async () => fetchServers(authData))
+  ipcMain.handle('reload-servers', async () => {
+    const result = await fetchServers(authData)
+    await reloadMihomoConfiguration()
+    return result
+  })
   ipcMain.handle('fetch-server-delays', async (_, names, testUrl, timeout, activateBeforeTest = false) => {
     return fetchMihomoProxyDelays(names, testUrl, timeout, activateBeforeTest)
   })

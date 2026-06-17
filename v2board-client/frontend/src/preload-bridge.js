@@ -25,6 +25,10 @@ window.electronAPI = {
     if (window.__ELECTRON__) return window.__ELECTRON__.fetchServers()
     return Promise.resolve(null)
   },
+  reloadServers: () => {
+    if (window.__ELECTRON__) return window.__ELECTRON__.reloadServers()
+    return Promise.resolve(null)
+  },
   fetchServerDelays: (names, testUrl, timeout, activateBeforeTest = false) => {
     if (window.__ELECTRON__) return window.__ELECTRON__.fetchServerDelays(names, testUrl, timeout, activateBeforeTest)
     return Promise.resolve({})

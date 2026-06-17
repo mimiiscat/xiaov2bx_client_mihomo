@@ -794,19 +794,20 @@ function Dashboard({ userInfo, onLogout, appConfig }) {
 	  const handleRefresh = async (action, setter) => {
 	    try {
 	      const electron = getElectron()
-	      if (action === 'fetchServers') setServerDelays({})
+	      const isServerAction = action === 'fetchServers' || action === 'reloadServers'
+	      if (isServerAction) setServerDelays({})
 	      const res = await electron[action]()
 	      if (res?.data) {
 	        setter(res.data)
-	        if (action === 'fetchServers' && Array.isArray(res.data) && res.data.length && !selectedServer) {
-	          const first = res.data.find(s => s?.name)?.name || ''
-	          if (first) {
-	            setSelectedServer(first)
-	            await electron.setSelectedServer?.(first)
-	          }
-	        }
-	        if (action === 'fetchServers') {
+	        if (isServerAction) {
 	          const names = Array.isArray(res.data) ? res.data.map(s => s?.name).filter(Boolean) : []
+	          if (names.length && !names.includes(selectedServer)) {
+	            const first = names[0] || ''
+	            if (first) {
+	              setSelectedServer(first)
+	              await electron.setSelectedServer?.(first)
+	            }
+	          }
 	          if (names.length) {
 	            const delays = await electron.fetchServerDelays?.(names, delayTestUrl, delayTestTimeout, true)
 	            if (delays && typeof delays === 'object') setServerDelays(delays)
@@ -1105,7 +1106,7 @@ function Dashboard({ userInfo, onLogout, appConfig }) {
 	      {activeTab === 'servers' && (
 	        <div className="card">
 	          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-	            <button className="btn-small" onClick={() => handleRefresh('fetchServers', setServers)}>🔄 刷新</button>
+	            <button className="btn-small" onClick={() => handleRefresh('reloadServers', setServers)}>🔄 刷新</button>
 	            <button className="btn-small" onClick={handleTestDelays} disabled={testingDelays || servers.length === 0}>
 	              {testingDelays ? '⏳ 测速中' : '⚡ 手动测速'}
 	            </button>
