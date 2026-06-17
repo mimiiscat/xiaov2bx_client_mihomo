@@ -14,6 +14,34 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
+function formatPlanTraffic(amount) {
+  const value = Number(amount || 0)
+  if (!value) return '0 GB'
+  return `${Number.isInteger(value) ? value : value.toFixed(1)} GB`
+}
+
+function getPlanPrice(plan) {
+  const candidates = [
+    ['month_price', '月'],
+    ['quarter_price', '季'],
+    ['half_year_price', '半年'],
+    ['year_price', '年'],
+    ['two_year_price', '2年'],
+    ['three_year_price', '3年'],
+    ['onetime_price', '次'],
+    ['reset_price', '重置'],
+  ]
+
+  for (const [key, label] of candidates) {
+    const value = plan?.[key]
+    if (value !== null && value !== undefined && value !== '' && Number(value) > 0) {
+      return { value: Number(value), label }
+    }
+  }
+
+  return { value: null, label: '月' }
+}
+
 // ─── Styles ────────────────────────────────────────────────
 const css = `
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -483,6 +511,9 @@ function Dashboard({ userInfo, onLogout }) {
 	    if (activeTab === 'servers') {
 	      handleRefresh('fetchServers', setServers)
 	    }
+	    if (activeTab === 'subscribe') {
+	      handleRefresh('fetchSubscribe', setSubData)
+	    }
 	  }, [activeTab])
 
 	  const handleSelectServer = async (server) => {
@@ -606,8 +637,15 @@ function Dashboard({ userInfo, onLogout }) {
           {plans.length > 0 ? plans.map((p, i) => (
             <div key={i} className="item-card">
               <div className="item-name">{p.name}</div>
-              <div className="item-price">¥{p.price} <span style={{ fontSize: 11, color: '#888' }}>/{p.period?.[0] || '月'}</span></div>
-              <div className="item-desc">{formatBytes(p.transfer_enable)}</div>
+              <div className="item-price">
+                {(() => {
+                  const price = getPlanPrice(p)
+                  return price.value !== null
+                    ? <>¥{price.value.toFixed(2)} <span style={{ fontSize: 11, color: '#888' }}>/{price.label}</span></>
+                    : <span style={{ color: '#888', fontSize: 12 }}>暂无价格</span>
+                })()}
+              </div>
+              <div className="item-desc">{formatPlanTraffic(p.transfer_enable)}</div>
             </div>
           )) : <div className="empty">暂无套餐</div>}
         </div>
