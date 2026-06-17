@@ -47,6 +47,14 @@ function getPlanPrice(plan) {
   return { value: null, label: '月' }
 }
 
+function getPlanNameById(plans, planId) {
+  if (!planId) return '无'
+  const match = Array.isArray(plans)
+    ? plans.find((plan) => String(plan?.id) === String(planId))
+    : null
+  return match?.name || `计划ID ${planId}`
+}
+
 // ─── Styles ────────────────────────────────────────────────
 const css = `
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -623,7 +631,7 @@ function Dashboard({ userInfo, onLogout }) {
                 ['设备限制', data.device_limit ?? '不限'],
                 ['账户余额', formatCurrencyCents(data.balance)],
                 ['佣金余额', formatCurrencyCents(data.commission_balance)],
-                ['计划ID', data.plan_id || '无'],
+                ['当前套餐', getPlanNameById(plans, data.plan_id)],
               ].map(([k, v]) => (
                 <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   <span style={{ color: '#888' }}>{k}</span><span style={{ color: '#ccc' }}>{v}</span>
