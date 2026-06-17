@@ -32,6 +32,7 @@ if (typeof process !== 'undefined' && process.versions?.electron) {
     forgetPassword: (email, password, emailCode) => window.require('electron').ipcRenderer.invoke('forget-password', email, password, emailCode),
     onProxyStatus: (cb) => window.require('electron').ipcRenderer.on('proxy-status', (_, status) => cb(status)),
     onTraffic: (cb) => window.require('electron').ipcRenderer.on('traffic-update', (_, traffic) => cb(traffic)),
+    onServerDelayUpdate: (cb) => window.require('electron').ipcRenderer.on('server-delay-update', (_, payload) => cb(payload)),
     logout: () => window.require('electron').ipcRenderer.invoke('logout'),
     quit: () => window.require('electron').ipcRenderer.send('quit'),
   }

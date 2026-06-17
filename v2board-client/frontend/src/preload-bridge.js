@@ -103,6 +103,11 @@ window.electronAPI = {
       window.__ELECTRON__.onTraffic(cb)
     }
   },
+  onServerDelayUpdate: (cb) => {
+    if (window.__ELECTRON__) {
+      window.__ELECTRON__.onServerDelayUpdate(cb)
+    }
+  },
   logout: () => {
     if (window.__ELECTRON__) return window.__ELECTRON__.logout()
     return Promise.resolve({ success: true })

@@ -629,6 +629,10 @@ async function fetchMihomoProxyDelay(name, testUrl = DEFAULT_DELAY_TEST_URL, tim
   }
 }
 
+function sendDelayUpdate(name, delay) {
+  win?.webContents.send('server-delay-update', { name, delay })
+}
+
 async function fetchMihomoProxyDelays(names, testUrl = DEFAULT_DELAY_TEST_URL, timeout = 5000, activateBeforeTest = false) {
   const list = Array.isArray(names) ? names.filter(Boolean) : []
   if (!list.length) return {}
@@ -646,6 +650,7 @@ async function fetchMihomoProxyDelays(names, testUrl = DEFAULT_DELAY_TEST_URL, t
         await selectMihomoProxy(current)
         await new Promise(resolve => setTimeout(resolve, 600))
         result[current] = await fetchMihomoProxyDelay(current, testUrl, timeout)
+        sendDelayUpdate(current, result[current])
       }
     } finally {
       if (originalSelected && originalSelected !== (await getMihomoSelectedProxy())) {
@@ -666,6 +671,7 @@ async function fetchMihomoProxyDelays(names, testUrl = DEFAULT_DELAY_TEST_URL, t
       const current = list[index++]
       const delay = await fetchMihomoProxyDelay(current, testUrl, timeout)
       result[current] = delay
+      sendDelayUpdate(current, delay)
     }
   }
 

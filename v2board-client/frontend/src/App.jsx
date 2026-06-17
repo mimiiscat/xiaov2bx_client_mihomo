@@ -778,6 +778,14 @@ function Dashboard({ userInfo, onLogout, appConfig }) {
 	    })
 	  }, [])
 
+	  useEffect(() => {
+	    const electron = getElectron()
+	    electron.onServerDelayUpdate?.((payload) => {
+	      if (!payload?.name) return
+	      setServerDelays((prev) => ({ ...prev, [payload.name]: payload.delay }))
+	    })
+	  }, [])
+
 	  const handleToggle = async () => {
 	    setMsg('')
 	    setLoading(true)
