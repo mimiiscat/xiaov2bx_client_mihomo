@@ -69,6 +69,10 @@ function getPlanNameById(plans, planId) {
   return match?.name || `计划ID ${planId}`
 }
 
+function getPlanDescription(plan) {
+  return plan?.content || plan?.description || plan?.remark || ''
+}
+
 // ─── Styles ────────────────────────────────────────────────
 const css = `
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -131,8 +135,9 @@ const css = `
 	.item-card { background: rgba(255,255,255,0.03); border-radius: 8px; padding: 12px; margin-bottom: 6px; border: 1px solid rgba(255,255,255,0.04); }
 	.item-card.selectable { cursor: pointer; transition: border-color 0.2s, background 0.2s; }
 	.item-card.selectable:hover { border-color: rgba(102,126,234,0.35); background: rgba(102,126,234,0.08); }
-	.item-card.selected { border-color: rgba(102,126,234,0.75); background: rgba(102,126,234,0.16); }
+.item-card.selected { border-color: rgba(102,126,234,0.75); background: rgba(102,126,234,0.16); }
 .item-name { font-size: 13px; font-weight: 600; color: #fff; }
+.item-content { font-size: 11px; color: #aeb4d1; margin-top: 4px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
 .item-desc { font-size: 11px; color: #888; margin-top: 3px; }
 .item-price { font-size: 15px; font-weight: 700; color: #667eea; margin-top: 4px; }
 
@@ -673,6 +678,9 @@ function Dashboard({ userInfo, onLogout }) {
           {plans.length > 0 ? plans.map((p, i) => (
             <div key={i} className="item-card">
               <div className="item-name">{p.name}</div>
+              {getPlanDescription(p) && (
+                <div className="item-content">{getPlanDescription(p)}</div>
+              )}
               <div className="item-price">
                 {(() => {
                   const price = getPlanPrice(p)
