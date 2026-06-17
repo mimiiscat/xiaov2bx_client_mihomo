@@ -256,8 +256,9 @@ function LoginPage({ onLoginSuccess }) {
     if (resp.success === false) return false
     if (resp.errors) return false
     if (resp.data !== undefined && resp.data !== null) return true
-    const message = String(resp.message || resp.error || '').toLowerCase()
-    if (/invalid|错误|失败|验证码|password|email/.test(message)) return false
+    const message = String(resp.message || resp.error || '')
+    if (/成功|success|ok|done|已重置|修改成功/i.test(message)) return true
+    if (/invalid|错误|失败|验证码|password|email/i.test(message)) return false
     return false
   }
 
@@ -276,7 +277,7 @@ function LoginPage({ onLoginSuccess }) {
         }
         result = await electron.forgetPassword?.(email, password, emailCode.trim())
         if (isSuccessfulForgetResponse(result)) {
-          setMsg('修改成功，请返回登录')
+          setMsg(result?.message || '修改成功，请返回登录')
           setPassword('')
           setEmailCode('')
         } else {
