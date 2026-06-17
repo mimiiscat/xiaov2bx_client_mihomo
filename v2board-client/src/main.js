@@ -33,6 +33,7 @@ let activeControllerPort = 0
 let trafficRequest = null
 let trafficState = { up: 0, down: 0, uploadTotal: 0, downloadTotal: 0 }
 let activeProxyName = ''
+let isDelayTestSession = false
 const MAIN_PROXY_GROUP = '🚀 节点选择'
 const FALLBACK_PROXY_GROUP = '🐟 漏网之鱼'
 
@@ -559,7 +560,7 @@ async function getMihomoSelectedProxy() {
 }
 
 async function selectMihomoProxy(name) {
-  if (!name || !isProxyOn) return false
+  if (!name || (!isProxyOn && !isDelayTestSession)) return false
   try {
     await mihomoControllerRequest('PUT', `/proxies/${encodeURIComponent(MAIN_PROXY_GROUP)}`, { name })
     activeProxyName = await getMihomoSelectedProxy()
@@ -572,7 +573,7 @@ async function selectMihomoProxy(name) {
 }
 
 async function measureDelayThroughMixedPort(testUrl, timeout = 5000) {
-  if (!isProxyOn || !activeMixedPort) return null
+  if (!(isProxyOn || isDelayTestSession) || !activeMixedPort) return null
   const curlBinary = process.platform === 'win32' ? 'curl.exe' : 'curl'
   const timeoutSeconds = Math.max(3, Math.ceil(timeout / 1000))
   try {
@@ -632,8 +633,13 @@ async function fetchMihomoProxyDelays(names, testUrl = DEFAULT_DELAY_TEST_URL, t
   const list = Array.isArray(names) ? names.filter(Boolean) : []
   if (!list.length) return {}
   const result = {}
+  let startedTempSession = false
 
-  if (activateBeforeTest && isProxyOn) {
+  if (activateBeforeTest && !isProxyOn && !isDelayTestSession) {
+    startedTempSession = await startDelayTestMihomo()
+  }
+
+  if (activateBeforeTest && (isProxyOn || isDelayTestSession)) {
     const originalSelected = await getMihomoSelectedProxy()
     try {
       for (const current of list) {
@@ -645,6 +651,9 @@ async function fetchMihomoProxyDelays(names, testUrl = DEFAULT_DELAY_TEST_URL, t
       if (originalSelected && originalSelected !== (await getMihomoSelectedProxy())) {
         await selectMihomoProxy(originalSelected)
       }
+    }
+    if (startedTempSession) {
+      stopMihomo({ skipSystemProxy: true, emitStatus: false })
     }
     return result
   }
@@ -662,6 +671,9 @@ async function fetchMihomoProxyDelays(names, testUrl = DEFAULT_DELAY_TEST_URL, t
 
   const workers = Array.from({ length: Math.min(concurrency, list.length) }, () => worker())
   await Promise.all(workers)
+  if (startedTempSession) {
+    stopMihomo({ skipSystemProxy: true, emitStatus: false })
+  }
   return result
 }
 
@@ -720,7 +732,9 @@ async function setMacSystemProxy(enabled) {
   await Promise.all(tasks)
 }
 
-async function startMihomo() {
+
+async function startMihomo(options = {}) {
+  const { enableSystemProxy = true, emitStatus = true } = options
   const binaryPath = findMihomoBinary()
   if (!binaryPath) {
     console.error('[Mihomo] Binary not found in', getLibsPath())
@@ -761,37 +775,56 @@ async function startMihomo() {
   mihomoProcess.on('exit', () => {
     console.log('[mihomo] exited')
     isProxyOn = false
+    isDelayTestSession = false
     activeProxyName = ''
     updateTrayIcon()
   })
 
-  isProxyOn = true
-  updateTrayIcon()
+  isProxyOn = !!enableSystemProxy
+  isDelayTestSession = !enableSystemProxy
+  if (enableSystemProxy) updateTrayIcon()
   const controllerReady = await waitForMihomoController()
   if (controllerReady) {
     await selectMihomoProxy(selectedProxyName)
-    win?.webContents.send('proxy-status', { on: isProxyOn, selectedProxyName, activeProxyName })
+    if (emitStatus && enableSystemProxy) {
+      win?.webContents.send('proxy-status', { on: isProxyOn, selectedProxyName, activeProxyName })
+    }
   } else {
     console.error('[Mihomo] Controller did not become ready')
   }
-  setMacSystemProxy(true).catch(err => console.error('[System Proxy] Enable error:', err.message))
-  console.log(`[System Proxy] Enabled on 127.0.0.1:${activeMixedPort}`)
-  setTimeout(startTrafficStream, 800)
+
+  if (enableSystemProxy) {
+    setMacSystemProxy(true).catch(err => console.error('[System Proxy] Enable error:', err.message))
+    console.log(`[System Proxy] Enabled on 127.0.0.1:${activeMixedPort}`)
+    setTimeout(startTrafficStream, 800)
+  }
 
   return true
 }
 
-function stopMihomo() {
+async function startDelayTestMihomo() {
+  if (mihomoProcess && (isProxyOn || isDelayTestSession)) return true
+  return startMihomo({ enableSystemProxy: false, emitStatus: false })
+}
+
+function stopMihomo(options = {}) {
+  const { skipSystemProxy = false, emitStatus = true } = options
   stopTrafficStream()
-  setMacSystemProxy(false).catch(err => console.error('[System Proxy] Disable error:', err.message))
+  if (!skipSystemProxy) {
+    setMacSystemProxy(false).catch(err => console.error('[System Proxy] Disable error:', err.message))
+  }
   if (mihomoProcess) {
     try { mihomoProcess.kill('SIGTERM') } catch (_) {}
     mihomoProcess = null
   }
   isProxyOn = false
+  isDelayTestSession = false
   activeProxyName = ''
   resetTrafficState()
   updateTrayIcon()
+  if (emitStatus) {
+    win?.webContents.send('proxy-status', { on: false, selectedProxyName, activeProxyName })
+  }
 }
 
 // ─── v2board API Client ────────────────────────────────────
