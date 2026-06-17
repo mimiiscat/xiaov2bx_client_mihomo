@@ -696,6 +696,10 @@ async function fetchStat(authToken) {
   return apiRequest('GET', '/user/getStat', null, authToken)
 }
 
+async function fetchGuestConfig() {
+  return apiRequest('GET', '/guest/comm/config')
+}
+
 async function doLogin(email, password) {
   return apiRequest('POST', '/passport/auth/login', { email, password })
 }
@@ -703,6 +707,22 @@ async function doLogin(email, password) {
 async function doRegister(email, password, emailCode, inviteCode) {
   return apiRequest('POST', '/passport/auth/register', {
     email, password, email_code: emailCode || '', invite_code: inviteCode || '',
+  })
+}
+
+async function sendEmailVerify(email, isforget = false) {
+  return apiRequest('POST', '/passport/comm/sendEmailVerify', {
+    email,
+    recaptcha_data: '',
+    isforget: isforget ? '1' : '',
+  })
+}
+
+async function doForgetPassword(email, password, emailCode) {
+  return apiRequest('POST', '/passport/auth/forget', {
+    email,
+    password,
+    email_code: emailCode || '',
   })
 }
 
@@ -846,6 +866,9 @@ function setupIPC() {
   ipcMain.handle('fetch-plans', async () => fetchPlans(authData))
   ipcMain.handle('fetch-servers', async () => fetchServers(authData))
   ipcMain.handle('fetch-stat', async () => fetchStat(authData))
+  ipcMain.handle('fetch-guest-config', async () => fetchGuestConfig())
+  ipcMain.handle('send-email-verify', async (_, email, isforget) => sendEmailVerify(email, isforget))
+  ipcMain.handle('forget-password', async (_, email, password, emailCode) => doForgetPassword(email, password, emailCode))
 
   // Proxy
   ipcMain.handle('toggle-proxy', async () => {

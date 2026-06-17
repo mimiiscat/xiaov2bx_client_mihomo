@@ -29,6 +29,10 @@ window.electronAPI = {
     if (window.__ELECTRON__) return window.__ELECTRON__.fetchStat()
     return Promise.resolve(null)
   },
+  fetchGuestConfig: () => {
+    if (window.__ELECTRON__) return window.__ELECTRON__.fetchGuestConfig()
+    return Promise.resolve(null)
+  },
   toggleProxy: () => {
     if (window.__ELECTRON__) return window.__ELECTRON__.toggleProxy()
     return Promise.resolve({ on: false })
@@ -39,6 +43,14 @@ window.electronAPI = {
   },
   setServer: (url) => {
     if (window.__ELECTRON__) return window.__ELECTRON__.setServer(url)
+    return Promise.resolve({ success: false })
+  },
+  sendEmailVerify: (email, isforget) => {
+    if (window.__ELECTRON__) return window.__ELECTRON__.sendEmailVerify(email, isforget)
+    return Promise.resolve({ success: false })
+  },
+  forgetPassword: (email, password, emailCode) => {
+    if (window.__ELECTRON__) return window.__ELECTRON__.forgetPassword(email, password, emailCode)
     return Promise.resolve({ success: false })
   },
   getStatus: () => {

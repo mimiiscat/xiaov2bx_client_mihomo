@@ -172,9 +172,67 @@ function LoginPage({ onLoginSuccess }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [inviteCode, setInviteCode] = useState('')
-  const [isRegister, setIsRegister] = useState(false)
+  const [emailCode, setEmailCode] = useState('')
+  const [mode, setMode] = useState('login')
+  const [guestConfig, setGuestConfig] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [loadingCode, setLoadingCode] = useState(false)
+  const [loadingConfig, setLoadingConfig] = useState(false)
   const [msg, setMsg] = useState('')
+
+  const isRegister = mode === 'register'
+  const isForgot = mode === 'forgot'
+  const emailVerifyEnabled = !!guestConfig?.is_email_verify
+  const needEmailCode = isForgot || emailVerifyEnabled
+
+  const loadGuestConfig = async () => {
+    setLoadingConfig(true)
+    try {
+      const electron = getElectron()
+      const res = await electron.fetchGuestConfig?.()
+      if (res?.data) {
+        setGuestConfig(res.data)
+      } else {
+        setGuestConfig({ is_email_verify: 0 })
+      }
+    } catch {
+      setGuestConfig({ is_email_verify: 0 })
+    }
+    setLoadingConfig(false)
+  }
+
+  useEffect(() => {
+    loadGuestConfig()
+  }, [])
+
+  useEffect(() => {
+    setMsg('')
+    setEmailCode('')
+    if (mode === 'register' && guestConfig === null && !loadingConfig) {
+      loadGuestConfig()
+    }
+  }, [mode])
+
+  const sendVerificationCode = async () => {
+    if (!email) {
+      setMsg('请先填写邮箱')
+      return
+    }
+    setLoadingCode(true)
+    setMsg('')
+    try {
+      const electron = getElectron()
+      const res = await electron.sendEmailVerify?.(email, isForgot)
+      if (res?.errors) {
+        setMsg(res?.message || '验证码发送失败')
+      } else {
+        setMsg('验证码已发送，请查收邮箱')
+      }
+    } catch (err) {
+      setMsg('网络错误: ' + err.message)
+    }
+    setLoadingCode(false)
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -183,15 +241,40 @@ function LoginPage({ onLoginSuccess }) {
     try {
       let result
       const electron = getElectron()
-      if (isRegister) {
-        result = await electron.register(email, password, '', inviteCode)
+      if (isForgot) {
+        if (!emailCode.trim()) {
+          setMsg('请输入邮箱验证码')
+          setLoading(false)
+          return
+        }
+        result = await electron.forgetPassword?.(email, password, emailCode.trim())
+        if (result?.errors) {
+          setMsg(result?.message || '找回密码失败')
+        } else {
+          setMsg('密码已重置，请返回登录')
+          setMode('login')
+          setPassword('')
+          setEmailCode('')
+        }
+      } else if (isRegister) {
+        if (emailVerifyEnabled && !emailCode.trim()) {
+          setMsg('请输入邮箱验证码')
+          setLoading(false)
+          return
+        }
+        result = await electron.register(email, password, emailVerifyEnabled ? emailCode.trim() : '', inviteCode)
+        if (result?.success) {
+          await onLoginSuccess(result.data)
+        } else {
+          setMsg(result?.error || '操作失败')
+        }
       } else {
         result = await electron.login(email, password)
-      }
-      if (result?.success) {
-        await onLoginSuccess(result.data)
-      } else {
-        setMsg(result?.error || '操作失败')
+        if (result?.success) {
+          await onLoginSuccess(result.data)
+        } else {
+          setMsg(result?.error || '操作失败')
+        }
       }
     } catch (err) {
       setMsg('网络错误: ' + err.message)
@@ -203,12 +286,12 @@ function LoginPage({ onLoginSuccess }) {
     <div>
       <div className="logo-icon">🌐</div>
       <div className="page-title">v2Board 客户端</div>
-      <div className="page-sub">{isRegister ? '创建新账户' : '登录你的账户'}</div>
+      <div className="page-sub">
+        {isForgot ? '通过邮箱验证码找回密码' : isRegister ? (loadingConfig ? '正在检查邮箱验证配置…' : emailVerifyEnabled ? '创建新账户，需要邮箱验证码' : '创建新账户') : '登录你的账户'}
+      </div>
 
       <div className="card">
         <form onSubmit={handleSubmit}>
-
-
           <label className="label">邮箱</label>
           <input className="input" type="email" placeholder="your@email.com" value={email}
             onChange={(e) => setEmail(e.target.value)} required />
@@ -216,6 +299,31 @@ function LoginPage({ onLoginSuccess }) {
           <label className="label">密码</label>
           <input className="input" type="password" placeholder="••••••••" value={password}
             onChange={(e) => setPassword(e.target.value)} required />
+
+          {needEmailCode && (
+            <>
+              <label className="label">邮箱验证码</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  className="input"
+                  style={{ flex: 1, marginBottom: 0 }}
+                  placeholder="请输入验证码"
+                  value={emailCode}
+                  onChange={(e) => setEmailCode(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="btn-small"
+                  onClick={sendVerificationCode}
+                  disabled={loadingCode || !email || (isRegister && loadingConfig)}
+                  style={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+                >
+                  {loadingCode ? '发送中...' : '发送验证码'}
+                </button>
+              </div>
+            </>
+          )}
 
           {isRegister && (
             <>
@@ -227,14 +335,26 @@ function LoginPage({ onLoginSuccess }) {
 
           {msg && <div className={msg.includes('成功') ? 'success-msg' : 'error-msg'}>{msg}</div>}
 
-          <button type="submit" className="btn" disabled={loading}>
-            {loading ? '处理中...' : (isRegister ? '注册' : '登录')}
+          <button type="submit" className="btn" disabled={loading || (isRegister && loadingConfig)}>
+            {loading ? '处理中...' : (isForgot ? '找回密码' : isRegister ? '注册' : '登录')}
           </button>
         </form>
 
-        <button className="btn-secondary" onClick={() => { setIsRegister(!isRegister); setMsg('') }}>
+        <button className="btn-secondary" onClick={() => { setMode(isRegister ? 'login' : 'register'); setMsg('') }}>
           {isRegister ? '已有账户？返回登录' : '没有账户？注册'}
         </button>
+
+        {!isForgot && (
+          <button className="btn-secondary" onClick={() => { setMode('forgot'); setMsg('') }}>
+            忘记密码？
+          </button>
+        )}
+
+        {isForgot && (
+          <button className="btn-secondary" onClick={() => { setMode('login'); setMsg('') }}>
+            返回登录
+          </button>
+        )}
 
       </div>
     </div>
