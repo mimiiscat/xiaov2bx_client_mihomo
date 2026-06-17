@@ -53,13 +53,13 @@ npm start
 
 ```bash
 # macOS (Apple Silicon)
-TARGET=darwin ARCH=arm64 npx electron-builder build --mac --arm64
+node scripts/build.js mac arm64
 
 # macOS (Intel)
-TARGET=darwin ARCH=x64 npx electron-builder build --mac --x64
+node scripts/build.js mac x64
 
 # Windows
-TARGET=win32 npx electron-builder build --win --x64
+node scripts/build.js win
 ```
 
 或使用构建脚本：

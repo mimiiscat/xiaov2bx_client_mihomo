@@ -806,6 +806,62 @@ async function setMacSystemProxy(enabled) {
   await Promise.all(tasks)
 }
 
+async function refreshWindowsInternetSettings() {
+  if (process.platform !== 'win32') return
+  const script = `
+    Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class WinInet {
+  [DllImport("wininet.dll", SetLastError = true, CharSet = CharSet.Auto)]
+  public static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);
+}
+"@;
+    [void][WinInet]::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0);
+    [void][WinInet]::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0);
+  `
+  const powershell = process.env.ComSpec ? 'powershell.exe' : 'powershell'
+  await execFilePromise(powershell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script])
+}
+
+async function setWindowsSystemProxy(enabled) {
+  if (process.platform !== 'win32') return
+  const proxyValue = `127.0.0.1:${activeMixedPort}`
+  const proxyOverride = 'localhost;127.0.0.1;<local>'
+  const ops = enabled
+    ? [
+        ['add', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings', '/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '1', '/f'],
+        ['add', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings', '/v', 'ProxyServer', '/t', 'REG_SZ', '/d', proxyValue, '/f'],
+        ['add', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings', '/v', 'ProxyOverride', '/t', 'REG_SZ', '/d', proxyOverride, '/f'],
+      ]
+    : [
+        ['add', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings', '/v', 'ProxyEnable', '/t', 'REG_DWORD', '/d', '0', '/f'],
+        ['delete', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings', '/v', 'ProxyServer', '/f'],
+        ['delete', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings', '/v', 'ProxyOverride', '/f'],
+      ]
+
+  for (const args of ops) {
+    const { error, stderr } = await execFilePromise('reg.exe', args)
+    if (error) {
+      const isDeleteMissingValue = args[0] === 'delete' && /unable to find the specified registry key or value/i.test(String(stderr || error.message || ''))
+      if (!isDeleteMissingValue) {
+        throw new Error((stderr || error.message || '').trim() || 'Windows system proxy update failed')
+      }
+    }
+  }
+
+  await refreshWindowsInternetSettings()
+}
+
+async function setSystemProxy(enabled) {
+  if (process.platform === 'darwin') {
+    return setMacSystemProxy(enabled)
+  }
+  if (process.platform === 'win32') {
+    return setWindowsSystemProxy(enabled)
+  }
+}
+
 
 async function startMihomo(options = {}) {
   const { enableSystemProxy = true, emitStatus = true } = options
@@ -869,7 +925,7 @@ async function startMihomo(options = {}) {
   }
 
   if (enableSystemProxy) {
-    setMacSystemProxy(true).catch(err => console.error('[System Proxy] Enable error:', err.message))
+    setSystemProxy(true).catch(err => console.error('[System Proxy] Enable error:', err.message))
     console.log(`[System Proxy] Enabled on 127.0.0.1:${activeMixedPort}`)
     setTimeout(startTrafficStream, 800)
   }
@@ -888,7 +944,7 @@ function stopMihomo(options = {}) {
   const { skipSystemProxy = false, emitStatus = true } = options
   stopTrafficStream()
   if (!skipSystemProxy) {
-    setMacSystemProxy(false).catch(err => console.error('[System Proxy] Disable error:', err.message))
+    setSystemProxy(false).catch(err => console.error('[System Proxy] Disable error:', err.message))
   }
   if (mihomoProcess) {
     try { mihomoProcess.kill('SIGTERM') } catch (_) {}

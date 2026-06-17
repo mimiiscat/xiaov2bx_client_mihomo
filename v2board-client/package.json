@@ -9,9 +9,10 @@
     "start": "electron .",
     "dev": "concurrently \"cd frontend && npm run dev\" \"wait-on http://localhost:9000 && electron .\"",
     "build:frontend": "cd frontend && npm run build",
-    "build": "npm run build:frontend && electron-builder --config electron-builder.config.js",
-    "dist:mac": "TARGET=darwin npx electron-builder --config electron-builder.config.js --mac",
-    "dist:win": "TARGET=win32 npx electron-builder --config electron-builder.config.js --win"
+    "prepare:libs": "node scripts/prepare-mihomo.js",
+    "build": "node scripts/build.js",
+    "dist:mac": "node scripts/build.js mac",
+    "dist:win": "node scripts/build.js win"
   },
   "dependencies": {
     "axios": "^1.6.0",
