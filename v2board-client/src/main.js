@@ -34,6 +34,7 @@ let trafficRequest = null
 let trafficState = { up: 0, down: 0, uploadTotal: 0, downloadTotal: 0 }
 let activeProxyName = ''
 let isDelayTestSession = false
+let refreshTrayMenu = () => {}
 const MAIN_PROXY_GROUP = '🚀 节点选择'
 const FALLBACK_PROXY_GROUP = '🐟 漏网之鱼'
 
@@ -784,6 +785,7 @@ async function startMihomo(options = {}) {
     isDelayTestSession = false
     activeProxyName = ''
     updateTrayIcon()
+    refreshTrayMenu()
   })
 
   isProxyOn = !!enableSystemProxy
@@ -804,6 +806,8 @@ async function startMihomo(options = {}) {
     console.log(`[System Proxy] Enabled on 127.0.0.1:${activeMixedPort}`)
     setTimeout(startTrafficStream, 800)
   }
+
+  refreshTrayMenu()
 
   return true
 }
@@ -828,6 +832,7 @@ function stopMihomo(options = {}) {
   activeProxyName = ''
   resetTrafficState()
   updateTrayIcon()
+  refreshTrayMenu()
   if (emitStatus) {
     win?.webContents.send('proxy-status', { on: false, selectedProxyName, activeProxyName })
   }
@@ -988,6 +993,7 @@ function createTray() {
   })
 
   updateMenu()
+  refreshTrayMenu = updateMenu
   return { updateMenu, getIcon }
 }
 
