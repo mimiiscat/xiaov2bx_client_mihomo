@@ -20,6 +20,11 @@ function formatPlanTraffic(amount) {
   return `${Number.isInteger(value) ? value : value.toFixed(1)} GB`
 }
 
+function formatCurrencyCents(amount) {
+  const value = Number(amount || 0) / 100
+  return `¥${value.toFixed(2)}`
+}
+
 function getPlanPrice(plan) {
   const candidates = [
     ['month_price', '月'],
@@ -616,10 +621,9 @@ function Dashboard({ userInfo, onLogout }) {
             <div style={{ fontSize: 12, color: '#aaa' }}>
               {[
                 ['设备限制', data.device_limit ?? '不限'],
-                ['账户余额', `¥${data.balance || 0}`],
-                ['佣金余额', `¥${data.commission_balance || 0}`],
+                ['账户余额', formatCurrencyCents(data.balance)],
+                ['佣金余额', formatCurrencyCents(data.commission_balance)],
                 ['计划ID', data.plan_id || '无'],
-                ['UUID', (data.uuid || '').slice(0, 12) + '...'],
               ].map(([k, v]) => (
                 <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   <span style={{ color: '#888' }}>{k}</span><span style={{ color: '#ccc' }}>{v}</span>
