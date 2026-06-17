@@ -41,6 +41,7 @@ const css = `
 .btn-secondary { width: 100%; padding: 9px 0; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: #aaa; font-size: 12px; cursor: pointer; margin-top: 8px; transition: all 0.2s; }
 .btn-secondary:hover { border-color: rgba(255,255,255,0.2); color: #ddd; }
 .btn-small { padding: 6px 14px; border-radius: 6px; border: none; background: rgba(102,126,234,0.2); color: #667eea; font-size: 12px; cursor: pointer; font-weight: 500; transition: background 0.2s; }
+.btn-small { min-width: 82px; }
 .btn-small:hover { background: rgba(102,126,234,0.3); }
 
 .error-msg { color: #ff6b6b; font-size: 11px; margin-top: -4px; margin-bottom: 6px; }
@@ -184,6 +185,7 @@ function LoginPage({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false)
   const [loadingCode, setLoadingCode] = useState(false)
   const [loadingConfig, setLoadingConfig] = useState(false)
+  const [codeCountdown, setCodeCountdown] = useState(0)
   const [msg, setMsg] = useState('')
 
   const isRegister = mode === 'register'
@@ -212,8 +214,15 @@ function LoginPage({ onLoginSuccess }) {
   }, [])
 
   useEffect(() => {
+    if (codeCountdown <= 0) return
+    const timer = setTimeout(() => setCodeCountdown((n) => Math.max(0, n - 1)), 1000)
+    return () => clearTimeout(timer)
+  }, [codeCountdown])
+
+  useEffect(() => {
     setMsg('')
     setEmailCode('')
+    setCodeCountdown(0)
     if (mode === 'register' && guestConfig === null && !loadingConfig) {
       loadGuestConfig()
     }
@@ -233,6 +242,7 @@ function LoginPage({ onLoginSuccess }) {
         setMsg(res?.message || '验证码发送失败')
       } else {
         setMsg('验证码已发送，请查收邮箱')
+        setCodeCountdown(60)
       }
     } catch (err) {
       setMsg('网络错误: ' + err.message)
@@ -332,10 +342,10 @@ function LoginPage({ onLoginSuccess }) {
                   type="button"
                   className="btn-small"
                   onClick={sendVerificationCode}
-                  disabled={loadingCode || !email || (isRegister && loadingConfig)}
+                  disabled={loadingCode || codeCountdown > 0 || !email || (isRegister && loadingConfig)}
                   style={{ flexShrink: 0, whiteSpace: 'nowrap' }}
                 >
-                  {loadingCode ? '发送中...' : '发送验证码'}
+                  {loadingCode ? '发送中...' : codeCountdown > 0 ? `${codeCountdown}s` : '发送验证码'}
                 </button>
               </div>
               <div className="auth-hint">
