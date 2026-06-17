@@ -20,6 +20,7 @@ let mihomoBinPath = ''
 let mihomoConfigPath = ''
 let selectedProxyName = ''
 const DEFAULT_MIXED_PORT = 7897
+const DEFAULT_DELAY_TEST_URL = 'http://www.gstatic.com/generate_204'
 let activeMixedPort = DEFAULT_MIXED_PORT
 let activeControllerPort = 0
 let trafficRequest = null
@@ -521,6 +522,41 @@ async function selectMihomoProxy(name) {
   }
 }
 
+async function fetchMihomoProxyDelay(name, testUrl = DEFAULT_DELAY_TEST_URL, timeout = 5000) {
+  if (!name || !isProxyOn) return null
+  try {
+    const result = await mihomoControllerRequest(
+      'GET',
+      `/proxies/${encodeURIComponent(name)}/delay?url=${encodeURIComponent(testUrl)}&timeout=${timeout}`,
+    )
+    const delay = Number(result?.delay)
+    return Number.isFinite(delay) && delay >= 0 ? delay : null
+  } catch (err) {
+    console.error(`[Mihomo] Delay test error for ${name}:`, err.message)
+    return null
+  }
+}
+
+async function fetchMihomoProxyDelays(names, testUrl = DEFAULT_DELAY_TEST_URL, timeout = 5000) {
+  const list = Array.isArray(names) ? names.filter(Boolean) : []
+  if (!list.length) return {}
+  const result = {}
+  const concurrency = 4
+  let index = 0
+
+  async function worker() {
+    while (index < list.length) {
+      const current = list[index++]
+      const delay = await fetchMihomoProxyDelay(current, testUrl, timeout)
+      result[current] = delay
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, list.length) }, () => worker())
+  await Promise.all(workers)
+  return result
+}
+
 function execFilePromise(file, args) {
   return new Promise((resolve) => {
     execFile(file, args, (error, stdout, stderr) => {
@@ -865,6 +901,9 @@ function setupIPC() {
   ipcMain.handle('fetch-subscribe', async () => fetchSubscription(authData))
   ipcMain.handle('fetch-plans', async () => fetchPlans(authData))
   ipcMain.handle('fetch-servers', async () => fetchServers(authData))
+  ipcMain.handle('fetch-server-delays', async (_, names, testUrl, timeout) => {
+    return fetchMihomoProxyDelays(names, testUrl, timeout)
+  })
   ipcMain.handle('fetch-stat', async () => fetchStat(authData))
   ipcMain.handle('fetch-guest-config', async () => fetchGuestConfig())
   ipcMain.handle('send-email-verify', async (_, email, isforget) => sendEmailVerify(email, isforget))

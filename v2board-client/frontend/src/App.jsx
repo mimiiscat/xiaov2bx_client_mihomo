@@ -25,6 +25,20 @@ function formatCurrencyCents(amount) {
   return `¥${value.toFixed(2)}`
 }
 
+function formatLatency(value) {
+  const delay = Number(value)
+  if (!Number.isFinite(delay) || delay < 0) return '超时'
+  return `${Math.round(delay)} ms`
+}
+
+function latencyColor(value) {
+  const delay = Number(value)
+  if (!Number.isFinite(delay) || delay < 0) return '#ff6b6b'
+  if (delay < 200) return '#51cf66'
+  if (delay < 500) return '#ffd43b'
+  return '#ff922b'
+}
+
 function getPlanPrice(plan) {
   const candidates = [
     ['month_price', '月'],
@@ -445,6 +459,7 @@ function Dashboard({ userInfo, onLogout }) {
   const [loading, setLoading] = useState(false)
   const [plans, setPlans] = useState([])
 		  const [servers, setServers] = useState([])
+		  const [serverDelays, setServerDelays] = useState({})
 		  const [selectedServer, setSelectedServer] = useState('')
 		  const [activeServer, setActiveServer] = useState('')
 		  const [traffic, setTraffic] = useState({ up: 0, down: 0, uploadTotal: 0, downloadTotal: 0 })
@@ -505,6 +520,15 @@ function Dashboard({ userInfo, onLogout }) {
 	          if (first) {
 	            setSelectedServer(first)
 	            await electron.setSelectedServer?.(first)
+	          }
+	        }
+	        if (action === 'fetchServers') {
+	          const names = Array.isArray(res.data) ? res.data.map(s => s?.name).filter(Boolean) : []
+	          if (names.length) {
+	            const delays = await electron.fetchServerDelays?.(names, 'http://www.gstatic.com/generate_204', 5000)
+	            if (delays && typeof delays === 'object') setServerDelays(delays)
+	          } else {
+	            setServerDelays({})
 	          }
 	        }
 	      }
@@ -678,10 +702,14 @@ function Dashboard({ userInfo, onLogout }) {
 	                >
 	                  <div style={{ minWidth: 0 }}>
 	                    <div className="item-name">{s.name || `节点 ${i + 1}`}</div>
-	                    <div className="item-desc">{s.host || s.type || ''}</div>
 	                  </div>
-	                  <div style={{ fontSize: 11, color: selectedServer === s.name ? '#8ea0ff' : '#51cf66', marginLeft: 8 }}>
-	                    {selectedServer === s.name ? '已选' : '●'}
+	                  <div style={{ fontSize: 11, textAlign: 'right', marginLeft: 8, color: selectedServer === s.name ? '#8ea0ff' : latencyColor(serverDelays[s.name]) }}>
+	                    <div>{selectedServer === s.name ? '已选' : formatLatency(serverDelays[s.name])}</div>
+	                    {selectedServer === s.name && serverDelays[s.name] !== undefined && (
+	                      <div style={{ fontSize: 10, marginTop: 1, color: latencyColor(serverDelays[s.name]) }}>
+	                        {formatLatency(serverDelays[s.name])}
+	                      </div>
+	                    )}
 	                  </div>
 	                </div>
 	              ))}
