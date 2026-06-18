@@ -19,36 +19,44 @@ export function formatCurrencyCents(amount) {
 
 export function formatLatency(value) {
   if (value && typeof value === 'object') {
-    if (value.status === 'testing') return '测试中'
-    if (value.status === 'timeout') return '超时'
-    if (value.status === 'error') return '不可测'
-    const delay = Number(value.latency)
+    const rawDelay = value.delay !== undefined ? value.delay : value.latency
+    const delay = Number(rawDelay)
+    if (value.status === 'testing' || delay === -2) return '测试中'
+    if (value.status === 'timeout' || delay === 0 || (delay >= 10000 && delay <= 100000)) return '超时'
+    if (value.status === 'error' || delay > 100000) return '不可测'
     if (Number.isFinite(delay) && delay > 0) return `${Math.round(delay)} ms`
     return ''
   }
   if (value === null) return '不可测'
   const delay = Number(value)
+  if (delay === -2) return '测试中'
+  if (delay === 0 || (delay >= 10000 && delay <= 100000)) return '超时'
+  if (delay > 100000) return '不可测'
   if (!Number.isFinite(delay) || delay <= 0) return ''
   return `${Math.round(delay)} ms`
 }
 
 export function latencyColor(value) {
   if (value && typeof value === 'object') {
-    if (value.status === 'testing') return '#8ea0ff'
-    if (value.status === 'timeout') return '#ff922b'
-    if (value.status === 'error') return '#ff6b6b'
-    const delay = Number(value.latency)
+    const rawDelay = value.delay !== undefined ? value.delay : value.latency
+    const delay = Number(rawDelay)
+    if (value.status === 'testing' || delay === -2) return '#8ea0ff'
+    if (value.status === 'error' || delay > 100000) return '#ff6b6b'
+    if (value.status === 'timeout' || delay === 0 || delay >= 10000) return '#ff6b6b'
     if (!Number.isFinite(delay) || delay <= 0) return '#8d93bd'
-    if (delay < 120) return '#51cf66'
-    if (delay < 250) return '#ffd43b'
-    return '#ff922b'
+    if (delay >= 400) return '#ff922b'
+    if (delay >= 250) return '#667eea'
+    return '#51cf66'
   }
   if (value === null) return '#ff6b6b'
   const delay = Number(value)
+  if (delay === -2) return '#8ea0ff'
+  if (delay > 100000) return '#ff6b6b'
+  if (delay === 0 || delay >= 10000) return '#ff6b6b'
   if (!Number.isFinite(delay) || delay <= 0) return '#8d93bd'
-  if (delay < 120) return '#51cf66'
-  if (delay < 250) return '#ffd43b'
-  return '#ff922b'
+  if (delay >= 400) return '#ff922b'
+  if (delay >= 250) return '#667eea'
+  return '#51cf66'
 }
 
 export function getPlanPrice(plan) {

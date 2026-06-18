@@ -22,7 +22,10 @@ let mihomoBinPath = ''
 let mihomoConfigPath = ''
 let selectedProxyName = ''
 const DEFAULT_MIXED_PORT = 7897
-const DEFAULT_DELAY_TEST_URL = 'https://cp.cloudflare.com/generate_204'
+const DEFAULT_DELAY_TEST_URL = 'http://cp.cloudflare.com/generate_204'
+const DEFAULT_LATENCY_TIMEOUT = 10000
+const DELAY_TIMEOUT = 0
+const DELAY_ERROR = 1e6
 let activeMixedPort = DEFAULT_MIXED_PORT
 let activeControllerPort = 0
 let trafficRequest = null
@@ -33,6 +36,8 @@ let startMihomoPromise = null
 let refreshTrayMenu = () => {}
 const MAIN_PROXY_GROUP = '🚀 节点选择'
 const FALLBACK_PROXY_GROUP = '🐟 漏网之鱼'
+const LATENCY_TEST_URL_KEY = 'defaultLatencyTest'
+const LATENCY_TEST_TIMEOUT_KEY = 'defaultLatencyTimeout'
 
 function readAppConfig() {
   try {
@@ -206,19 +211,18 @@ function appendQuery(url, params) {
   }
 }
 
-function sendServerLatencyUpdate(key, latency, runId = null) {
-  win?.webContents.send('server-latency-update', { key, latency, runId })
-}
-
 function getStatusSnapshot() {
   return {
     proxyOn: isProxyOn,
     server: serverUrl,
     hasToken: !!authData,
+    mainProxyGroup: MAIN_PROXY_GROUP,
     selectedProxyName,
     activeProxyName,
     mixedPort: activeMixedPort,
     traffic: trafficState,
+    defaultLatencyTest: getConfig(LATENCY_TEST_URL_KEY, DEFAULT_DELAY_TEST_URL),
+    defaultLatencyTimeout: Number(getConfig(LATENCY_TEST_TIMEOUT_KEY, DEFAULT_LATENCY_TIMEOUT)) || DEFAULT_LATENCY_TIMEOUT,
   }
 }
 
@@ -598,115 +602,67 @@ async function selectMihomoProxy(name) {
   }
 }
 
-async function measureDelayThroughMixedPort(testUrl, timeout = 5000) {
-  if (!(isProxyOn || isDelayTestSession) || !activeMixedPort) return null
-  const curlBinary = process.platform === 'win32' ? 'curl.exe' : 'curl'
-  const timeoutSeconds = Math.max(3, Math.ceil(timeout / 1000))
-  try {
-    const args = [
-      '--silent',
-      '--show-error',
-      '--location',
-      '--output',
-      process.platform === 'win32' ? 'NUL' : '/dev/null',
-      '--proxy',
-      `http://127.0.0.1:${activeMixedPort}`,
-      '--connect-timeout',
-      String(timeoutSeconds),
-      '--max-time',
-      String(timeoutSeconds),
-      '--write-out',
-      '%{time_total}',
-      testUrl,
-    ]
-    const { error, stdout, stderr } = await execFilePromise(curlBinary, args)
-    if (error) {
-      console.error(`[Mihomo] Mixed-port delay test error (${testUrl}):`, (stderr || error.message || '').trim())
-      return null
-    }
-    const totalSeconds = Number(String(stdout || '').trim())
-    if (Number.isFinite(totalSeconds) && totalSeconds > 0) {
-      return Math.round(totalSeconds * 1000)
-    }
-    return null
-  } catch (err) {
-    console.error(`[Mihomo] Mixed-port delay test error (${testUrl}):`, err.message)
-    return null
-  }
-}
-
-async function fetchMihomoProxyDelay(name, testUrl = DEFAULT_DELAY_TEST_URL, timeout = 5000) {
-  if (!name || !(isProxyOn || isDelayTestSession)) return { latency: null, status: 'error' }
+async function fetchMihomoProxyDelay(name, testUrl = DEFAULT_DELAY_TEST_URL, timeout = DEFAULT_LATENCY_TIMEOUT) {
+  if (!name || !(isProxyOn || isDelayTestSession)) return { delay: DELAY_ERROR, latency: null, status: 'error' }
+  const startTime = Date.now()
   try {
     const currentUrl = Array.isArray(testUrl) ? (testUrl.find(Boolean) || DEFAULT_DELAY_TEST_URL) : (testUrl || DEFAULT_DELAY_TEST_URL)
-    const effectiveTimeout = Math.max(1000, Number(timeout) || 5000)
+    const effectiveTimeout = Math.max(1000, Number(timeout) || DEFAULT_LATENCY_TIMEOUT)
     const endpoint = `/proxies/${encodeURIComponent(name)}/delay?url=${encodeURIComponent(currentUrl)}&timeout=${effectiveTimeout}`
-    const resp = await mihomoControllerRequest('GET', endpoint, null, effectiveTimeout + 1000)
+    const timeoutResult = new Promise((resolve) => {
+      setTimeout(() => resolve({ delay: DELAY_TIMEOUT }), effectiveTimeout)
+    })
+    const resp = await Promise.race([
+      mihomoControllerRequest('GET', endpoint, null, effectiveTimeout + 1000),
+      timeoutResult,
+    ])
+    const elapsedTime = Date.now() - startTime
+    if (elapsedTime < 500) {
+      await new Promise((resolve) => setTimeout(resolve, 500 - elapsedTime))
+    }
     const delay = Number(resp?.delay ?? resp?.data?.delay ?? resp?.data ?? resp)
-    if (Number.isFinite(delay) && delay > 0 && delay < effectiveTimeout) return { latency: delay, status: 'ok' }
-    return { latency: null, status: 'timeout' }
+    if (!Number.isFinite(delay)) {
+      return { delay: DELAY_ERROR, latency: null, status: 'error', elapsed: Date.now() - startTime }
+    }
+    if (delay === DELAY_TIMEOUT || (delay >= effectiveTimeout && delay <= 1e5)) {
+      return { delay: DELAY_TIMEOUT, latency: null, status: 'timeout', elapsed: Date.now() - startTime }
+    }
+    if (delay > 1e5) {
+      return { delay: DELAY_ERROR, latency: null, status: 'error', elapsed: Date.now() - startTime }
+    }
+    return { delay, latency: delay, status: 'ok', elapsed: Date.now() - startTime }
   } catch (err) {
+    const elapsedTime = Date.now() - startTime
+    if (elapsedTime < 500) {
+      await new Promise((resolve) => setTimeout(resolve, 500 - elapsedTime))
+    }
     console.error(`[Mihomo] Delay test error for ${name}:`, err.message)
-    return { latency: null, status: 'timeout' }
+    return { delay: DELAY_ERROR, latency: null, status: 'error', elapsed: Date.now() - startTime }
   }
 }
 
-function getServerDisplayName(server) {
-  if (typeof server === 'string') return server.trim()
-  return String(server?.name || server?.remarks || server?.ps || '').trim()
-}
-
-async function fetchMihomoProxyDelays(servers, testUrl = DEFAULT_DELAY_TEST_URL, timeout = 5000, activateBeforeTest = false, runId = null) {
-  const list = Array.isArray(servers) ? servers.filter(Boolean) : []
-  if (!list.length) return {}
-  const result = {}
-  let startedTempSession = false
-  let proxyByName = new Map()
-
+async function delayMihomoGroup(groupName, testUrl = DEFAULT_DELAY_TEST_URL, timeout = DEFAULT_LATENCY_TIMEOUT) {
+  if (!groupName || !(isProxyOn || isDelayTestSession)) return null
+  const currentUrl = Array.isArray(testUrl) ? (testUrl.find(Boolean) || DEFAULT_DELAY_TEST_URL) : (testUrl || DEFAULT_DELAY_TEST_URL)
+  const effectiveTimeout = Math.max(1000, Number(timeout) || DEFAULT_LATENCY_TIMEOUT)
   try {
-    const proxies = await fetchServerProxies()
-    proxyByName = new Map(proxies.map(proxy => [getServerDisplayName(proxy), proxy]).filter(([name]) => name))
+    const endpoint = `/group/${encodeURIComponent(groupName)}/delay?url=${encodeURIComponent(currentUrl)}&timeout=${effectiveTimeout}`
+    return await mihomoControllerRequest('GET', endpoint, null, effectiveTimeout + 1000)
   } catch (err) {
-    console.error('[Mihomo] Build latency proxy map failed:', err.message)
+    console.error(`[Mihomo] Group delay test error for ${groupName}:`, err.message)
+    return null
   }
+}
 
-  const measurableList = list.map((item) => {
-    const name = getServerDisplayName(item)
-    return proxyByName.get(name) || item
-  })
-
-  if (activateBeforeTest && !isProxyOn && !isDelayTestSession) {
-    startedTempSession = await startDelayTestMihomo()
-    if (!startedTempSession) {
-      for (const item of measurableList) {
-        const name = getServerDisplayName(item)
-        if (name) sendServerLatencyUpdate(name, { latency: null, status: 'error' }, runId)
-      }
-      return result
-    }
+async function healthcheckMihomoProxyProvider(providerName) {
+  if (!providerName || !(isProxyOn || isDelayTestSession)) return null
+  try {
+    const endpoint = `/providers/proxies/${encodeURIComponent(providerName)}/healthcheck`
+    return await mihomoControllerRequest('GET', endpoint, null, DEFAULT_LATENCY_TIMEOUT + 1000)
+  } catch (err) {
+    console.error(`[Mihomo] Provider healthcheck error for ${providerName}:`, err.message)
+    return null
   }
-
-  const concurrency = 4
-  let index = 0
-
-  async function worker() {
-    while (index < measurableList.length) {
-      const current = measurableList[index++]
-      const name = getServerDisplayName(current)
-      if (!name) continue
-
-      const delay = await fetchMihomoProxyDelay(name, testUrl, timeout)
-      result[name] = delay
-      sendServerLatencyUpdate(name, delay, runId)
-    }
-  }
-
-  const workers = Array.from({ length: Math.min(concurrency, list.length) }, () => worker())
-  await Promise.all(workers)
-  if (startedTempSession) {
-    stopMihomo({ skipSystemProxy: true, emitStatus: false })
-  }
-  return result
 }
 
 function execFilePromise(file, args) {
@@ -1200,8 +1156,44 @@ function setupIPC() {
       reloaded,
     }
   })
-  ipcMain.handle('measure-server-delays', async (_, names, testUrl = DEFAULT_DELAY_TEST_URL, timeout = 5000, runId = null) => {
-    return fetchMihomoProxyDelays(names, testUrl, timeout, true, runId)
+  ipcMain.handle('get-proxy-delay', async (_, name, url = DEFAULT_DELAY_TEST_URL, timeout = DEFAULT_LATENCY_TIMEOUT) => {
+    return fetchMihomoProxyDelay(name, url, timeout)
+  })
+  ipcMain.handle('delay-group', async (_, groupName, url = DEFAULT_DELAY_TEST_URL, timeout = DEFAULT_LATENCY_TIMEOUT) => {
+    return delayMihomoGroup(groupName, url, timeout)
+  })
+  ipcMain.handle('healthcheck-proxy-provider', async (_, providerName) => {
+    return healthcheckMihomoProxyProvider(providerName)
+  })
+  ipcMain.handle('start-delay-test-session', async () => {
+    if (isProxyOn || isDelayTestSession) {
+      return { success: true, started: false }
+    }
+    const started = await startDelayTestMihomo()
+    return { success: started, started }
+  })
+  ipcMain.handle('stop-delay-test-session', async () => {
+    if (isDelayTestSession) {
+      stopMihomo({ skipSystemProxy: true, emitStatus: false })
+      return { success: true, stopped: true }
+    }
+    return { success: true, stopped: false }
+  })
+  ipcMain.handle('get-latency-config', async () => ({
+    defaultLatencyTest: getConfig(LATENCY_TEST_URL_KEY, DEFAULT_DELAY_TEST_URL),
+    defaultLatencyTimeout: Number(getConfig(LATENCY_TEST_TIMEOUT_KEY, DEFAULT_LATENCY_TIMEOUT)) || DEFAULT_LATENCY_TIMEOUT,
+  }))
+  ipcMain.handle('set-latency-config', async (_, payload = {}) => {
+    const nextUrl = typeof payload.defaultLatencyTest === 'string' && payload.defaultLatencyTest.trim()
+      ? payload.defaultLatencyTest.trim()
+      : getConfig(LATENCY_TEST_URL_KEY, DEFAULT_DELAY_TEST_URL)
+    const nextTimeoutValue = Number(payload.defaultLatencyTimeout)
+    const nextTimeout = Number.isFinite(nextTimeoutValue) && nextTimeoutValue > 0
+      ? Math.round(nextTimeoutValue)
+      : (Number(getConfig(LATENCY_TEST_TIMEOUT_KEY, DEFAULT_LATENCY_TIMEOUT)) || DEFAULT_LATENCY_TIMEOUT)
+    setConfig(LATENCY_TEST_URL_KEY, nextUrl)
+    setConfig(LATENCY_TEST_TIMEOUT_KEY, nextTimeout)
+    return { success: true, defaultLatencyTest: nextUrl, defaultLatencyTimeout: nextTimeout }
   })
   ipcMain.handle('fetch-stat', async () => fetchStat(authData))
   ipcMain.handle('fetch-guest-config', async () => fetchGuestConfig())

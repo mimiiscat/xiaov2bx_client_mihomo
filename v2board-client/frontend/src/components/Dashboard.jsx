@@ -12,9 +12,9 @@ import { DashboardPlansSection } from './DashboardPlansSection'
 import { DashboardStatusPanel } from './DashboardStatusPanel'
 import { DashboardTabs } from './DashboardTabs'
 import { ServerList } from './ServerList'
+import delayManager from '../services/delay'
 
 export function Dashboard({ userInfo, onLogout, appConfig }) {
-  const latencyTestTimeoutMs = 10000
   const [activeTab, setActiveTab] = useState('servers')
   const [proxyOn, setProxyOn] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -39,23 +39,37 @@ export function Dashboard({ userInfo, onLogout, appConfig }) {
   const [updatingNodes, setUpdatingNodes] = useState(false)
   const [measuringDelays, setMeasuringDelays] = useState(false)
   const [serverLatencies, setServerLatencies] = useState({})
+  const [delayGroupName, setDelayGroupName] = useState('')
   const nodeFeedbackTimer = useRef(null)
-  const latencyRunRef = useRef(0)
-  const latencyRunSeqRef = useRef(0)
   const autoMeasuredRef = useRef(false)
-  const latencyTimeoutTimersRef = useRef(new Map())
 
   const data = userInfo?.data
 
   useEffect(() => {
     const electron = getElectron()
-    electron.getStatus().then((s) => {
-      setProxyOn(s?.proxyOn || false)
-      setSelectedServer(s?.selectedProxyName || '')
-      setActiveServer(s?.activeProxyName || '')
-      if (s?.traffic) setTraffic(s.traffic)
-    })
+    Promise.all([electron.getStatus?.(), electron.getLatencyConfig?.()])
+      .then(([s, latencyCfg]) => {
+        setProxyOn(s?.proxyOn || false)
+        setSelectedServer(s?.selectedProxyName || '')
+        setActiveServer(s?.activeProxyName || '')
+        setDelayGroupName(s?.mainProxyGroup || '🚀 节点选择')
+        if (s?.traffic) setTraffic(s.traffic)
+        delayManager.configure({
+          defaultUrl: latencyCfg?.defaultLatencyTest || s?.defaultLatencyTest || appConfig?.default_latency_test,
+          defaultTimeout: latencyCfg?.defaultLatencyTimeout || s?.defaultLatencyTimeout || appConfig?.default_latency_timeout,
+          defaultGroup: s?.mainProxyGroup || '🚀 节点选择',
+        })
+      })
+      .catch((err) => console.error('[Dashboard] load status failed:', err?.message || err))
   }, [])
+
+  useEffect(() => {
+    delayManager.configure({
+      defaultUrl: appConfig?.default_latency_test,
+      defaultTimeout: appConfig?.default_latency_timeout,
+      defaultGroup: delayGroupName || '🚀 节点选择',
+    })
+  }, [appConfig, delayGroupName])
 
   useEffect(() => {
     const electron = getElectron()
@@ -72,98 +86,49 @@ export function Dashboard({ userInfo, onLogout, appConfig }) {
   }, [])
 
   useEffect(() => {
-    const electron = getElectron()
-    const unsubscribe = electron.onServerLatencyUpdate?.((payload) => {
-      const key = payload?.key || payload?.name
-      if (!key) return
-      if (payload.runId && payload.runId !== latencyRunRef.current) return
-      const latencyValue = payload?.latency
-      const normalizedLatency = latencyValue && typeof latencyValue === 'object'
-        ? latencyValue
-        : { latency: latencyValue ?? null, status: payload?.status || (payload?.latency > 0 ? 'ok' : 'error') }
-      const isPending = normalizedLatency.status === 'testing'
-      if (!isPending) {
-        const existingTimer = latencyTimeoutTimersRef.current.get(key)
-        if (existingTimer) {
-          clearTimeout(existingTimer)
-          latencyTimeoutTimersRef.current.delete(key)
+    if (!servers.length || !delayGroupName) return undefined
+    const groupName = delayGroupName
+    const nextLatencies = {}
+    servers.forEach((server) => {
+      if (!server?.name) return
+      const cached = delayManager.getDelayUpdate(server.name, groupName)
+      if (cached) {
+        nextLatencies[server.name] = {
+          ...cached,
+          latency: cached.delay === 1e6 ? null : cached.delay,
+          status: cached.delay === -2
+            ? 'testing'
+            : cached.delay === 0
+              ? 'timeout'
+              : cached.delay > 1e5
+                ? 'error'
+                : 'ok',
         }
       }
-      setServerLatencies((prev) => {
-        const current = prev?.[key]
-        if (
-          current &&
-          typeof current === 'object' &&
-          current.status === 'timeout' &&
-          current.runId === payload.runId
-        ) {
-          return prev
-        }
-        return {
+      delayManager.setListener(server.name, groupName, (update) => {
+        setServerLatencies((prev) => ({
           ...prev,
-          [key]: { ...normalizedLatency, runId: payload.runId },
-        }
+          [server.name]: {
+            ...update,
+            latency: update.delay === 1e6 ? null : update.delay,
+            status: update.delay === -2
+              ? 'testing'
+              : update.delay === 0
+                ? 'timeout'
+                : update.delay > 1e5
+                  ? 'error'
+                  : 'ok',
+          },
+        }))
       })
     })
+    setServerLatencies(nextLatencies)
     return () => {
-      if (typeof unsubscribe === 'function') unsubscribe()
-    }
-  }, [])
-
-  const clearLatencyTimeout = (name) => {
-    const timers = latencyTimeoutTimersRef.current
-    const timer = timers.get(name)
-    if (timer) {
-      clearTimeout(timer)
-      timers.delete(name)
-    }
-  }
-
-  const clearAllLatencyTimeouts = () => {
-    const timers = latencyTimeoutTimersRef.current
-    timers.forEach((timer) => clearTimeout(timer))
-    timers.clear()
-  }
-
-  const queueLatencyTimeout = (name, runId) => {
-    clearLatencyTimeout(name)
-    const timer = setTimeout(() => {
-      if (latencyRunRef.current !== runId) return
-      setServerLatencies((prev) => {
-        const current = prev?.[name]
-        if (current && typeof current === 'object' && current.status !== 'testing') return prev
-        return {
-          ...prev,
-          [name]: { latency: null, status: 'timeout', runId },
-        }
+      servers.forEach((server) => {
+        if (server?.name) delayManager.removeListener(server.name, groupName)
       })
-      latencyTimeoutTimersRef.current.delete(name)
-    }, latencyTestTimeoutMs)
-    latencyTimeoutTimersRef.current.set(name, timer)
-  }
-
-  const beginLatencyRun = (list, { clearExisting = true } = {}) => {
-    const normalized = normalizeServerList(list)
-    if (!normalized.length) return { runId: null, normalized }
-    const runId = Date.now() + (++latencyRunSeqRef.current)
-    latencyRunRef.current = runId
-    if (clearExisting) {
-      clearAllLatencyTimeouts()
-      setServerLatencies({})
     }
-    setServerLatencies((prev) => {
-      const next = { ...prev }
-      normalized.forEach((server) => {
-        if (!server?.name) return
-        next[server.name] = { latency: null, status: 'testing', runId }
-      })
-      return next
-    })
-    normalized.forEach((server) => {
-      if (server?.name) queueLatencyTimeout(server.name, runId)
-    })
-    return { runId, normalized }
-  }
+  }, [servers, delayGroupName])
 
   const handleToggle = async () => {
     setMsg('')
@@ -205,42 +170,44 @@ export function Dashboard({ userInfo, onLogout, appConfig }) {
   }
 
   const startServerLatencyCheck = async (list) => {
-    const { runId, normalized } = beginLatencyRun(list, { clearExisting: true })
-    if (!runId || !normalized.length) return null
+    const normalized = normalizeServerList(list)
+    if (!normalized.length) return null
+
+    const groupName = delayGroupName || '🚀 节点选择'
+    const timeout = delayManager.defaultTimeout || 10000
+    const names = normalized.map((server) => server?.name).filter(Boolean)
+    const providers = new Set(normalized.map((server) => server?.provider).filter(Boolean))
 
     try {
-      await getElectron().measureServerDelays?.(normalized, undefined, latencyTestTimeoutMs, runId)
-      if (latencyRunRef.current !== runId) return runId
+      if (providers.size > 0) {
+        await Promise.allSettled([...providers].map((provider) => delayManager.checkProxyProvider(provider)))
+      }
+      await delayManager.checkListDelay(names, groupName, timeout)
     } catch (err) {
-      console.error('[Dashboard] measureServerDelays failed:', err?.message || err)
+      console.error('[Dashboard] delay check failed:', err?.message || err)
     }
-    return runId
+    return groupName
   }
 
   const handleMeasureSingleServer = async (server) => {
     if (!server?.name) return
-    const { runId, normalized } = beginLatencyRun([server], { clearExisting: false })
-    if (!runId || !normalized.length) return
     try {
-      await getElectron().measureServerDelays?.(normalized, undefined, latencyTestTimeoutMs, runId)
+      if (server.provider) {
+        await delayManager.checkProxyProvider(server.provider)
+      } else {
+        await delayManager.checkDelay(server.name, delayGroupName || '🚀 节点选择', delayManager.defaultTimeout || 10000)
+      }
     } catch (err) {
       console.error('[Dashboard] measure single server failed:', err?.message || err)
-      setServerLatencies((prev) => ({
-        ...prev,
-        [server.name]: { latency: null, status: 'error', runId },
-      }))
     }
   }
 
   const handleMeasureDelays = async () => {
     setMeasuringDelays(true)
-    let runId = null
     try {
-      runId = await startServerLatencyCheck(servers)
+      await startServerLatencyCheck(servers)
     } finally {
-      if (!runId || latencyRunRef.current === runId) {
-        setMeasuringDelays(false)
-      }
+      setMeasuringDelays(false)
     }
   }
 
@@ -252,7 +219,7 @@ export function Dashboard({ userInfo, onLogout, appConfig }) {
     setNodeFeedback(null)
     setServers([])
     setServerLatencies({})
-    clearAllLatencyTimeouts()
+    delayManager.clearGroup(delayGroupName || '🚀 节点选择')
     autoMeasuredRef.current = false
     setUpdatingNodes(true)
     const ok = await handleRefresh('reloadServers', setServers)
@@ -270,7 +237,6 @@ export function Dashboard({ userInfo, onLogout, appConfig }) {
 
   useEffect(() => () => {
     if (nodeFeedbackTimer.current) clearTimeout(nodeFeedbackTimer.current)
-    clearAllLatencyTimeouts()
   }, [])
 
   useEffect(() => {
