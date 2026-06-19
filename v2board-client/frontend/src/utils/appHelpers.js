@@ -261,6 +261,36 @@ export function sanitizeHtml(html) {
     'BLOCKQUOTE', 'CODE', 'PRE', 'HR',
   ])
   const allowedAttrs = new Set(['class', 'style', 'href', 'target', 'rel', 'colspan', 'rowspan'])
+  const allowedStyleProps = new Set([
+    'color',
+    'font-weight',
+    'font-style',
+    'font-size',
+    'text-align',
+    'text-decoration',
+    'line-height',
+    'letter-spacing',
+    'white-space',
+  ])
+
+  const sanitizeStyle = (value) => {
+    if (!value) return ''
+    return String(value)
+      .split(';')
+      .map((rule) => rule.trim())
+      .filter(Boolean)
+      .map((rule) => {
+        const idx = rule.indexOf(':')
+        if (idx === -1) return ''
+        const property = rule.slice(0, idx).trim().toLowerCase()
+        const rawValue = rule.slice(idx + 1).trim()
+        if (!allowedStyleProps.has(property)) return ''
+        if (!rawValue) return ''
+        return `${property}: ${rawValue}`
+      })
+      .filter(Boolean)
+      .join('; ')
+  }
 
   const parser = new DOMParser()
   const doc = parser.parseFromString(String(html), 'text/html')
@@ -280,6 +310,12 @@ export function sanitizeHtml(html) {
         const isEvent = name.startsWith('on')
         if (isEvent || !allowedAttrs.has(name)) {
           child.removeAttribute(attr.name)
+          return
+        }
+        if (name === 'style') {
+          const normalizedStyle = sanitizeStyle(value)
+          if (normalizedStyle) child.setAttribute('style', normalizedStyle)
+          else child.removeAttribute(attr.name)
           return
         }
         if (name === 'href') {

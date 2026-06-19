@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { isLikelyUrl } from '../utils/appHelpers'
 
 export function PurchaseModal({
@@ -18,6 +19,15 @@ export function PurchaseModal({
   onOpenExternal,
   onCopyText,
 }) {
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose?.()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
   if (!plan) return null
 
   const checkoutValue = result?.checkoutValue || ''
@@ -25,14 +35,29 @@ export function PurchaseModal({
   const checkoutUrl = isLikelyUrl(checkoutValue) ? checkoutValue : ''
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-panel">
+    <div className="modal-overlay" onMouseDown={onClose}>
+      <div className="modal-panel" onMouseDown={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <div>
             <div className="modal-title">购买套餐</div>
             <div className="modal-sub">{plan.name}</div>
           </div>
-          <button className="close-btn" onClick={onClose}>✕</button>
+          <button
+            type="button"
+            className="modal-close-btn"
+            onMouseDown={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              onClose()
+            }}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+            }}
+            aria-label="关闭弹窗"
+          >
+            ×
+          </button>
         </div>
 
         {!result ? (
