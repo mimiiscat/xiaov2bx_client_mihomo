@@ -1106,6 +1106,19 @@ async function fetchNotices() {
   return apiRequest('GET', '/user/notice/fetch', null, authData)
 }
 
+async function fetchOrders(query = {}) {
+  const params = {}
+  if (query && typeof query === 'object') {
+    if (query.status !== undefined && query.status !== null && query.status !== '') params.status = query.status
+  }
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    search.set(key, String(value))
+  })
+  const endpoint = search.toString() ? `/user/order/fetch?${search.toString()}` : '/user/order/fetch'
+  return apiRequest('GET', endpoint, null, authData)
+}
+
 async function checkCoupon(code, planId) {
   return apiRequest('POST', '/user/coupon/check', {
     code,
@@ -1370,6 +1383,7 @@ function setupIPC() {
   ipcMain.handle('fetch-stat', async () => fetchStat(authData))
   ipcMain.handle('fetch-guest-config', async () => fetchGuestConfig())
   ipcMain.handle('fetch-notices', async () => fetchNotices())
+  ipcMain.handle('fetch-orders', async (_, query) => fetchOrders(query || {}))
   ipcMain.handle('get-app-config', async () => getRuntimeConfig())
   ipcMain.handle('get-update-info', async () => getUpdateInfo())
   ipcMain.handle('send-email-verify', async (_, email, isforget) => sendEmailVerify(email, isforget))

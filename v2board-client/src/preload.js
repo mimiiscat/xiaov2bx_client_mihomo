@@ -26,6 +26,7 @@ const bridge = {
   fetchStat: () => invoke('fetch-stat'),
   fetchGuestConfig: () => invoke('fetch-guest-config'),
   fetchNotices: () => invoke('fetch-notices'),
+  fetchOrders: (query) => invoke('fetch-orders', query),
   getAppConfig: () => invoke('get-app-config'),
   getUpdateInfo: () => invoke('get-update-info'),
   toggleProxy: () => invoke('toggle-proxy'),

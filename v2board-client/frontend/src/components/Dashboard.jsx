@@ -12,6 +12,7 @@ import { DashboardPlansSection } from './DashboardPlansSection'
 import { DashboardStatusPanel } from './DashboardStatusPanel'
 import { DashboardTabs } from './DashboardTabs'
 import { DashboardNoticeSection } from './DashboardNoticeSection'
+import { OrderSection } from './OrderSection'
 import { ServerList } from './ServerList'
 import delayManager from '../services/delay'
 
@@ -398,6 +399,10 @@ export function Dashboard({ userInfo, onLogout }) {
           onRefreshPlans={() => handleRefresh('fetchPlans', setPlans)}
           onOpenPurchase={openPurchase}
         />
+      )}
+
+      {activeTab === 'orders' && (
+        <OrderSection isActive={activeTab === 'orders'} plans={plans} />
       )}
 
       {activeTab === 'servers' && (
