@@ -5,6 +5,7 @@ const os = require('os')
 const path = require('path')
 const { execFileSync } = require('child_process')
 const zlib = require('zlib')
+const { getArchDir } = require('../src/platform')
 
 const ROOT_DIR = path.resolve(__dirname, '..')
 const LIBS_DIR = path.join(ROOT_DIR, 'libs')
@@ -12,17 +13,17 @@ const MIHOMO_VERSION = 'v1.19.27'
 
 const TARGETS = [
   {
-    dir: 'darwin-arm64',
+    dir: getArchDir('darwin', 'arm64'),
     asset: `mihomo-darwin-arm64-${MIHOMO_VERSION}.gz`,
     output: 'mihomo-darwin-arm64',
   },
   {
-    dir: 'darwin-x64',
+    dir: getArchDir('darwin', 'x64'),
     asset: `mihomo-darwin-amd64-${MIHOMO_VERSION}.gz`,
     output: 'mihomo-darwin-amd64',
   },
   {
-    dir: 'win32-x64',
+    dir: getArchDir('win32', 'x64'),
     asset: `mihomo-windows-amd64-${MIHOMO_VERSION}.zip`,
     output: 'mihomo-windows-amd64.exe',
   },

@@ -7,6 +7,7 @@ import { Dashboard } from './components/Dashboard'
 function App() {
   const [userInfo, setUserInfo] = useState(null)
   const [appConfig, setAppConfig] = useState(null)
+  const [windowMaximized, setWindowMaximized] = useState(false)
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -35,6 +36,28 @@ function App() {
 
     loadConfig()
     restoreSession()
+
+    const syncWindowState = async () => {
+      try {
+        const status = await getElectron().isWindowMaximized?.()
+        setWindowMaximized(!!status?.maximized)
+      } catch (err) {
+        console.error('[App] window state sync failed:', err?.message || err)
+      }
+    }
+
+    syncWindowState()
+  }, [])
+
+  useEffect(() => {
+    const onResize = async () => {
+      try {
+        const status = await getElectron().isWindowMaximized?.()
+        setWindowMaximized(!!status?.maximized)
+      } catch {}
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
   }, [])
 
   const handleLoginSuccess = async () => {
@@ -49,14 +72,39 @@ function App() {
     setUserInfo(null)
   }
 
+  const handleMinimize = () => {
+    getElectron().minimizeWindow?.()
+  }
+
+  const handleToggleMaximize = async () => {
+    try {
+      const res = await getElectron().toggleMaximizeWindow?.()
+      if (typeof res?.maximized === 'boolean') setWindowMaximized(res.maximized)
+      else setWindowMaximized((value) => !value)
+    } catch (err) {
+      console.error('[App] toggle maximize failed:', err?.message || err)
+    }
+  }
+
+  const handleClose = () => {
+    getElectron().hideWindow?.()
+  }
+
   return (
     <div className="app">
-      <div className="drag-bar" />
-      <div className="header">
-        <span className="header-title">
+      <div className="window-header">
+        <div className="window-controls" aria-label="Window controls">
+          <button className="window-control window-control-close" onClick={handleClose} aria-label="关闭窗口" />
+          <button className="window-control window-control-minimize" onClick={handleMinimize} aria-label="最小化窗口" />
+          <button
+            className={`window-control window-control-maximize ${windowMaximized ? 'is-maximized' : ''}`}
+            onClick={handleToggleMaximize}
+            aria-label={windowMaximized ? '还原窗口' : '最大化窗口'}
+          />
+        </div>
+        <div className="window-title">
           {appConfig?.window_title || `${appConfig?.app_name || 'v2Board'} · ${appConfig?.client_name || 'Mihomo'}`}
-        </span>
-        <button className="close-btn" onClick={() => getElectron().quit?.()}>✕</button>
+        </div>
       </div>
       <div className="content">
         {!userInfo ? (

@@ -11,6 +11,7 @@ import { DashboardOverviewSection } from './DashboardOverviewSection'
 import { DashboardPlansSection } from './DashboardPlansSection'
 import { DashboardStatusPanel } from './DashboardStatusPanel'
 import { DashboardTabs } from './DashboardTabs'
+import { DashboardNoticeSection } from './DashboardNoticeSection'
 import { ServerList } from './ServerList'
 import delayManager from '../services/delay'
 
@@ -20,6 +21,7 @@ export function Dashboard({ userInfo, onLogout, appConfig }) {
   const [loading, setLoading] = useState(false)
   const [proxyTargetOn, setProxyTargetOn] = useState(null)
   const [plans, setPlans] = useState([])
+  const [notices, setNotices] = useState([])
   const [servers, setServers] = useState([])
   const [selectedServer, setSelectedServer] = useState('')
   const [activeServer, setActiveServer] = useState('')
@@ -41,7 +43,6 @@ export function Dashboard({ userInfo, onLogout, appConfig }) {
   const [serverLatencies, setServerLatencies] = useState({})
   const [delayGroupName, setDelayGroupName] = useState('')
   const nodeFeedbackTimer = useRef(null)
-  const autoMeasuredRef = useRef(false)
 
   const data = userInfo?.data
 
@@ -176,12 +177,8 @@ export function Dashboard({ userInfo, onLogout, appConfig }) {
     const groupName = delayGroupName || '🚀 节点选择'
     const timeout = delayManager.defaultTimeout || 10000
     const names = normalized.map((server) => server?.name).filter(Boolean)
-    const providers = new Set(normalized.map((server) => server?.provider).filter(Boolean))
 
     try {
-      if (providers.size > 0) {
-        await Promise.allSettled([...providers].map((provider) => delayManager.checkProxyProvider(provider)))
-      }
       await delayManager.checkListDelay(names, groupName, timeout)
     } catch (err) {
       console.error('[Dashboard] delay check failed:', err?.message || err)
@@ -192,11 +189,7 @@ export function Dashboard({ userInfo, onLogout, appConfig }) {
   const handleMeasureSingleServer = async (server) => {
     if (!server?.name) return
     try {
-      if (server.provider) {
-        await delayManager.checkProxyProvider(server.provider)
-      } else {
-        await delayManager.checkDelay(server.name, delayGroupName || '🚀 节点选择', delayManager.defaultTimeout || 10000)
-      }
+      await delayManager.checkDelay(server.name, delayGroupName || '🚀 节点选择', delayManager.defaultTimeout || 10000)
     } catch (err) {
       console.error('[Dashboard] measure single server failed:', err?.message || err)
     }
@@ -220,7 +213,6 @@ export function Dashboard({ userInfo, onLogout, appConfig }) {
     setServers([])
     setServerLatencies({})
     delayManager.clearGroup(delayGroupName || '🚀 节点选择')
-    autoMeasuredRef.current = false
     setUpdatingNodes(true)
     const ok = await handleRefresh('reloadServers', setServers)
     setUpdatingNodes(false)
@@ -242,6 +234,7 @@ export function Dashboard({ userInfo, onLogout, appConfig }) {
   useEffect(() => {
     if (!data) return
     handleRefresh('fetchPlans', setPlans)
+    handleRefresh('fetchNotices', setNotices)
     handleRefresh('fetchServers', setServers)
     handleRefresh('fetchSubscribe', setSubData)
   }, [])
@@ -250,19 +243,13 @@ export function Dashboard({ userInfo, onLogout, appConfig }) {
     if (activeTab === 'plans') {
       handleRefresh('fetchPlans', setPlans)
     }
+    if (activeTab === 'notices') {
+      handleRefresh('fetchNotices', setNotices)
+    }
     if (activeTab === 'servers') {
       handleRefresh('fetchServers', setServers)
     }
   }, [activeTab])
-
-  useEffect(() => {
-    if (activeTab !== 'servers' || !servers.length || autoMeasuredRef.current) return
-    autoMeasuredRef.current = true
-    const timer = setTimeout(() => {
-      handleMeasureDelays()
-    }, 600)
-    return () => clearTimeout(timer)
-  }, [activeTab, servers])
 
   const handleSelectServer = async (server) => {
     if (!server?.name) return
@@ -401,6 +388,10 @@ export function Dashboard({ userInfo, onLogout, appConfig }) {
 
       {activeTab === 'overview' && (
         <DashboardOverviewSection data={data} plans={plans} />
+      )}
+
+      {activeTab === 'notices' && (
+        <DashboardNoticeSection notices={notices} />
       )}
 
       {activeTab === 'plans' && (

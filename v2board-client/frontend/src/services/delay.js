@@ -374,7 +374,7 @@ class DelayManager {
     if (delay === -1) return '-'
     if (delay === TESTING) return '测试中'
     if (delay === TIMEOUT || (delay >= timeout && delay <= 1e5)) return '超时'
-    if (delay > 1e5) return '不可测'
+    if (delay > 1e5) return '超时'
     return `${delay} ms`
   }
 

@@ -4,11 +4,53 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe 
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
 
 .app { width: 400px; height: 100vh; min-height: 0; background: linear-gradient(180deg, #0f0c29 0%, #1a1a3e 50%, #24243e 100%); display: flex; flex-direction: column; overflow: hidden; }
-.drag-bar { height: 28px; -webkit-app-region: drag; flex-shrink: 0; }
-.header { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; height: 36px; -webkit-app-region: no-drag; flex-shrink: 0; }
-.header-title { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9); }
-.close-btn { width: 24px; height: 24px; border: none; border-radius: 4px; background: rgba(255,255,255,0.06); color: #888; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; -webkit-app-region: no-drag; }
-.close-btn:hover { background: rgba(255,107,107,0.2); color: #ff6b6b; }
+.window-header {
+  flex-shrink: 0;
+  height: 76px;
+  padding: 14px 16px 10px;
+  -webkit-app-region: drag;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 12px;
+}
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+.window-control {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+}
+.window-control::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  background: rgba(255,255,255,0.15);
+}
+.window-control:hover::after { opacity: 1; }
+.window-control-close { background: #ff5f57; }
+.window-control-minimize { background: #febc2e; }
+.window-control-maximize { background: #28c840; }
+.window-control-maximize.is-maximized { background: #6b7280; }
+.window-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+  line-height: 1.2;
+  padding-left: 2px;
+}
 .content { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 16px; -webkit-app-region: no-drag; }
 
 .card { background: rgba(255,255,255,0.04); border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.06); }
@@ -77,6 +119,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe 
 .item-price { font-size: 15px; font-weight: 700; color: #667eea; margin-top: 4px; }
 .item-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; }
 .item-buy { width: auto; padding: 6px 14px; min-width: 74px; margin-top: 0; }
+
+.notice-list { display: grid; gap: 12px; }
+.notice-card { padding: 14px; }
+.notice-image { width: 100%; border-radius: 10px; margin-bottom: 12px; display: block; object-fit: cover; max-height: 180px; }
+.notice-title { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+.notice-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.notice-tag { font-size: 10px; padding: 4px 8px; border-radius: 999px; background: rgba(102,126,234,0.18); color: #aeb8ff; border: 1px solid rgba(102,126,234,0.28); }
+.notice-content { font-size: 12px; line-height: 1.7; color: #c9cde8; white-space: pre-wrap; word-break: break-word; }
 
 .modal-overlay { position: fixed; inset: 0; background: rgba(6, 8, 20, 0.72); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 18px; }
 .modal-panel { width: 100%; max-width: 360px; max-height: 88vh; overflow-y: auto; background: #18183a; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.35); }

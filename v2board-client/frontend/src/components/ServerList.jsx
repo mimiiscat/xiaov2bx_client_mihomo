@@ -29,42 +29,48 @@ export function ServerList({
       )}
       {servers.length > 0 ? (
         <div className="server-list">
-          {servers.map((s, i) => (
-            <div
-              key={s.id || `${s.name}-${i}`}
-              className={`item-card selectable ${selectedServer === s.name ? 'selected' : ''}`}
-              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-              onClick={() => onSelectServer(s)}
-            >
-              <div style={{ minWidth: 0 }}>
-                <div className="item-name">{s.name || `节点 ${i + 1}`}</div>
-              </div>
-              <div style={{ fontSize: 11, textAlign: 'right', marginLeft: 12, minWidth: 64 }}>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  title="点击重新测试"
-                  style={{ color: latencyColor(serverLatencies[s.name]), cursor: 'pointer' }}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onMeasureServerDelay?.(s)
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
+          {servers.map((s, i) => {
+            const latency = serverLatencies[s.name]
+            const latencyText = latency ? formatLatency(latency) : '待测试'
+            const latencyTone = latency ? latencyColor(latency) : '#8d93bd'
+
+            return (
+              <div
+                key={s.id || `${s.name}-${i}`}
+                className={`item-card selectable ${selectedServer === s.name ? 'selected' : ''}`}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                onClick={() => onSelectServer(s)}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div className="item-name">{s.name || `节点 ${i + 1}`}</div>
+                </div>
+                <div style={{ fontSize: 11, textAlign: 'right', marginLeft: 12, minWidth: 64 }}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    title="点击重新测试"
+                    style={{ color: latencyTone, cursor: 'pointer' }}
+                    onClick={(event) => {
                       event.stopPropagation()
                       onMeasureServerDelay?.(s)
-                    }
-                  }}
-                >
-                  {formatLatency(serverLatencies[s.name]) || '检测中'}
-                </div>
-                <div style={{ color: '#8ea0ff', marginTop: 2 }}>
-                  {selectedServer === s.name ? '已选' : ''}
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        onMeasureServerDelay?.(s)
+                      }
+                    }}
+                  >
+                    {latencyText}
+                  </div>
+                  <div style={{ color: '#8ea0ff', marginTop: 2 }}>
+                    {selectedServer === s.name ? '已选' : ''}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       ) : <div className="empty">暂无节点</div>}
     </div>

@@ -3,6 +3,7 @@
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { main: prepareMihomo } = require('./prepare-mihomo')
+const { getArchDir, normalizeTargetPlatform } = require('../src/platform')
 
 const ROOT_DIR = path.resolve(__dirname, '..')
 
@@ -33,9 +34,9 @@ function run(command, args, env = {}) {
 }
 
 function normalizeTarget(target) {
-  const value = String(target || '').toLowerCase()
-  if (value === 'win' || value === 'win32' || value === 'windows') return 'win'
-  if (value === 'mac' || value === 'darwin' || value === 'osx') return 'mac'
+  const value = normalizeTargetPlatform(target)
+  if (value === 'win32') return 'win'
+  if (value === 'darwin') return 'mac'
   if (process.platform === 'win32') return 'win'
   return 'mac'
 }
@@ -52,10 +53,8 @@ async function main() {
   const target = normalizeTarget(process.argv[2])
   const arch = normalizeArch(target, process.argv[3])
   const targetArchDir = target === 'win'
-    ? 'win32-x64'
-    : arch === 'arm64'
-      ? 'darwin-arm64'
-      : 'darwin-x64'
+    ? getArchDir('win32', 'x64')
+    : getArchDir('darwin', arch)
 
   await prepareMihomo()
   run(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build:frontend'])

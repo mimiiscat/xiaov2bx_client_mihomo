@@ -1,13 +1,10 @@
 const appConfig = require('./app.config.json')
+const { getArchDir } = require('./src/platform')
 
 function getTargetArchDir() {
   if (process.env.TARGET_ARCH_DIR) return process.env.TARGET_ARCH_DIR
   if (process.env.TARGET === 'win32') return 'win32-x64'
-  if (process.platform === 'darwin') {
-    return process.arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64'
-  }
-  if (process.platform === 'win32') return 'win32-x64'
-  return process.platform
+  return getArchDir()
 }
 
 module.exports = {

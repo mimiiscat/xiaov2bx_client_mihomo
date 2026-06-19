@@ -8,6 +8,7 @@ const http = require('http')
 const killPort = require('kill-port')
 const YAML = require('js-yaml')
 const { shell, clipboard } = require('electron')
+const { getArchDir: getPlatformArchDir, getMihomoBinaryCandidates } = require('./platform')
 const APP_CONFIG_PATH = path.join(__dirname, '..', 'app.config.json')
 
 let win = null
@@ -93,11 +94,7 @@ function setConfig(key, value) {
 // ─── Path Helpers ──────────────────────────────────────────
 
 function getArchDir() {
-  if (process.platform === 'darwin') {
-    return process.arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64'
-  }
-  if (process.platform === 'win32') return 'win32-x64'
-  return process.platform === 'darwin' ? 'darwin' : process.platform
+  return getPlatformArchDir(process.platform, process.arch)
 }
 
 function getLibsPath() {
@@ -116,19 +113,7 @@ function getGeoPath() {
 
 function findMihomoBinary() {
   const libsPath = getLibsPath()
-  const candidates = [
-    'mihomo',
-    'mihomo-darwin-arm64',
-    'mihomo-darwin-amd64',
-    'mihomo-darwin-arm64-compatible',
-    'mihomo-darwin-amd64-compatible',
-    'mihomo-windows-amd64.exe',
-    'mihomo-windows-amd64-compatible',
-    'mihomo-windows-amd64-compatible.exe',
-    'mihomo.exe',
-    'mihomo-linux-amd64',
-    'mihomo-linux-arm64',
-  ]
+  const candidates = getMihomoBinaryCandidates(process.platform)
   for (const name of candidates) {
     const p = path.join(libsPath, name)
     if (fs.existsSync(p)) return p
@@ -940,6 +925,10 @@ async function fetchGuestConfig() {
   return apiRequest('GET', '/guest/comm/config')
 }
 
+async function fetchNotices() {
+  return apiRequest('GET', '/user/notice/fetch', null, authData)
+}
+
 async function checkCoupon(code, planId) {
   return apiRequest('POST', '/user/coupon/check', {
     code,
@@ -1064,6 +1053,7 @@ function updateTrayIcon() {
 
 function createWindow() {
   const runtimeConfig = getRuntimeConfig()
+  const isMac = process.platform === 'darwin'
   win = new BrowserWindow({
     width: 400,
     height: 620,
@@ -1072,7 +1062,7 @@ function createWindow() {
     frame: false,
     maximizable: false,
     title: runtimeConfig.window_title || 'v2Board · Mihomo',
-    titleBarStyle: 'hiddenInset',
+    titleBarStyle: isMac ? 'hiddenInset' : undefined,
     webPreferences: {
       devTools: !app.isPackaged,
       nodeIntegration: false,
@@ -1080,6 +1070,10 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
     },
   })
+
+  if (process.platform === 'darwin' && typeof win.setWindowButtonVisibility === 'function') {
+    win.setWindowButtonVisibility(false)
+  }
 
   // Inject bridge script
   win.webContents.on('did-finish-load', () => {
@@ -1197,6 +1191,7 @@ function setupIPC() {
   })
   ipcMain.handle('fetch-stat', async () => fetchStat(authData))
   ipcMain.handle('fetch-guest-config', async () => fetchGuestConfig())
+  ipcMain.handle('fetch-notices', async () => fetchNotices())
   ipcMain.handle('get-app-config', async () => getRuntimeConfig())
   ipcMain.handle('send-email-verify', async (_, email, isforget) => sendEmailVerify(email, isforget))
   ipcMain.handle('forget-password', async (_, email, password, emailCode) => doForgetPassword(email, password, emailCode))
@@ -1252,6 +1247,28 @@ function setupIPC() {
   ipcMain.handle('get-status', async () => ({
     ...getStatusSnapshot(),
   }))
+
+  ipcMain.handle('window-minimize', async () => {
+    win?.minimize()
+    return { success: true }
+  })
+
+  ipcMain.handle('window-toggle-maximize', async () => {
+    if (!win) return { success: false, maximized: false }
+    if (win.isMaximized()) win.unmaximize()
+    else win.maximize()
+    return { success: true, maximized: win.isMaximized() }
+  })
+
+  ipcMain.handle('window-is-maximized', async () => ({
+    success: true,
+    maximized: !!win?.isMaximized(),
+  }))
+
+  ipcMain.handle('window-hide', async () => {
+    win?.hide()
+    return { success: true }
+  })
 
   ipcMain.handle('logout', async () => {
     subscribeToken = ''

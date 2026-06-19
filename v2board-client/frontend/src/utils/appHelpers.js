@@ -23,16 +23,16 @@ export function formatLatency(value) {
     const delay = Number(rawDelay)
     if (value.status === 'testing' || delay === -2) return '测试中'
     if (value.status === 'timeout' || delay === 0 || (delay >= 10000 && delay <= 100000)) return '超时'
-    if (value.status === 'error' || delay > 100000) return '不可测'
+    if (value.status === 'error' || delay > 100000) return '超时'
     if (Number.isFinite(delay) && delay > 0) return `${Math.round(delay)} ms`
     return ''
   }
-  if (value === null) return '不可测'
+  if (value === null) return '待测试'
   const delay = Number(value)
   if (delay === -2) return '测试中'
   if (delay === 0 || (delay >= 10000 && delay <= 100000)) return '超时'
-  if (delay > 100000) return '不可测'
-  if (!Number.isFinite(delay) || delay <= 0) return ''
+  if (delay > 100000) return '超时'
+  if (!Number.isFinite(delay) || delay <= 0) return '待测试'
   return `${Math.round(delay)} ms`
 }
 
@@ -48,7 +48,7 @@ export function latencyColor(value) {
     if (delay >= 250) return '#667eea'
     return '#51cf66'
   }
-  if (value === null) return '#ff6b6b'
+  if (value === null) return '#8d93bd'
   const delay = Number(value)
   if (delay === -2) return '#8ea0ff'
   if (delay > 100000) return '#ff6b6b'

@@ -60,6 +60,16 @@ npm start
 ### 构建
 
 ```bash
+# macOS (Apple Silicon / Intel)
+npm run build
+
+# Windows
+npm run build
+```
+
+如果需要显式指定目标平台：
+
+```bash
 # macOS (Apple Silicon)
 node scripts/build.js mac arm64
 
@@ -70,11 +80,7 @@ node scripts/build.js mac x64
 node scripts/build.js win
 ```
 
-或使用构建脚本：
-
-```bash
-./build.sh
-```
+Windows 下也可以直接运行 `build.cmd`。
 
 ## 项目结构
 
@@ -98,8 +104,15 @@ v2board-client/
 ├── res/                      # 打包图标
 ├── package.json
 ├── build.sh                  # 构建脚本
+├── build.cmd                 # Windows 构建脚本
 └── README.md
 ```
+
+## 平台支持
+
+- macOS：支持 Apple Silicon 和 Intel
+- Windows：支持 x64
+- `npm run build` 会根据当前平台自动选择正确的打包目标和 mihomo 内核目录
 
 ## API 端点
 
