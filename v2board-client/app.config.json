@@ -1,11 +1,11 @@
 {
-  "app_name": "Netch加速",
-  "client_name": "Netch加速",
-  "app_version": "1.0.2",
-  "app_id": "com.v2board.client",
-  "product_name": "Netch加速",
-  "window_title": "Netch加速",
-  "page_title": "Netch加速 客户端",
-  "tray_tooltip": "Netch加速 Client",
-  "remote_config_url": "https://clash-verge.cn-nb1.rains3.com/client-config.json"
+  "app_name": "你的APP名",
+  "client_name": "你的APP名",
+  "app_version": "你的软件版本号(1.0.2)",
+  "app_id": "com.netchapp.client",
+  "product_name": "你的APP名",
+  "window_title": "你的APP名",
+  "page_title": "你的APP名",
+  "tray_tooltip": "你的APP名字",
+  "remote_config_url": "你的OSS地址"
 }
