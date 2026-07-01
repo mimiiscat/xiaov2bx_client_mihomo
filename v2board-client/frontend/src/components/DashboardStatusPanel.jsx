@@ -1,4 +1,4 @@
-import { formatBytes } from '../utils/appHelpers'
+﻿import { formatBytes } from '../utils/appHelpers'
 
 export function DashboardStatusPanel({
   data,
@@ -50,11 +50,10 @@ export function DashboardStatusPanel({
           </div>
           <div className="toggle-sub">
             {loading
-              ? (proxyTargetOn ? '正在启动 mihomo…' : '正在关闭 mihomo…')
-              : (proxyOn ? 'mihomo 内核运行中' : '点击开关启动')}
+              ? (proxyTargetOn ? '正在启动…' : '正在关闭…')
+              : (proxyOn ? '内核运行中' : '点击开关启动')}
           </div>
-          {selectedServer && <div className="selected-node">当前选择: {selectedServer}</div>}
-          {proxyOn && activeServer && <div className="selected-node">实际生效: {activeServer}</div>}
+          {selectedServer && <div className="selected-node">当前节点: {selectedServer}</div>}
         </div>
         <button
           className={`toggle-switch ${proxyOn ? 'on' : 'off'} ${loading ? 'pending' : ''}`}
