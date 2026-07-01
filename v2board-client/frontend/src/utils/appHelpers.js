@@ -67,7 +67,7 @@ export function getPlanPrice(plan) {
     ['year_price', '年'],
     ['two_year_price', '2年'],
     ['three_year_price', '3年'],
-    ['onetime_price', '次'],
+    ['onetime_price', '一次性'],
     ['reset_price', '重置'],
   ]
 
@@ -250,6 +250,7 @@ export function extractTradeNo(payload) {
 export function isLikelyUrl(text) {
   return typeof text === 'string' && /^https?:\/\//i.test(text)
 }
+
 
 export function sanitizeHtml(html) {
   if (!html) return ''

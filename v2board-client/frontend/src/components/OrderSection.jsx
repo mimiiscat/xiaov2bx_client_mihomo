@@ -78,6 +78,21 @@ function getOrderStatus(order) {
   return { label: order?.status !== undefined && order?.status !== null ? `状态 ${order.status}` : '未知', tone: 'pending' }
 }
 
+const PERIOD_LABELS = {
+  month_price: '月付',
+  quarter_price: '季付',
+  half_year_price: '半年',
+  year_price: '年付',
+  two_year_price: '两年',
+  three_year_price: '三年',
+  onetime_price: '一次性',
+  reset_price: '重置',
+}
+
+function formatPeriod(period) {
+  return PERIOD_LABELS[period] || period || '未知'
+}
+
 function getOrderAmount(order) {
   if (order?.total_amount !== undefined && order?.total_amount !== null && order?.total_amount !== '') {
     return formatCurrencyCents(order.total_amount)
@@ -166,7 +181,7 @@ export function OrderSection({ isActive, plans = [] }) {
                 <div className="order-item__meta">
                   <span>订单号 {getOrderTradeNo(order) || '未知'}</span>
                   <span>{getOrderAmount(order)}</span>
-                  {order?.period ? <span>{order.period}</span> : null}
+                  {order?.period ? <span>{formatPeriod(order.period)}</span> : null}
                 </div>
                 <div className="order-item__time">
                   {formatTime(order?.created_at || order?.createdAt)}{order?.paid_at ? ` · 支付于 ${formatTime(order.paid_at || order.paidAt)}` : ''}
@@ -187,7 +202,7 @@ export function OrderSection({ isActive, plans = [] }) {
                     </div>
                     <div className="order-detail__row">
                       <span>周期</span>
-                      <strong>{order?.period || '未知'}</strong>
+                      <strong>{formatPeriod(order?.period)}</strong>
                     </div>
                     <div className="order-detail__row">
                       <span>支付方式</span>

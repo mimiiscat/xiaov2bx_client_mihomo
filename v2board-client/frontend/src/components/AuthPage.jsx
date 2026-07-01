@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { getElectron } from '../utils/electron'
 import { getLoginSiteName, getLoginSiteDescription } from '../utils/appHelpers'
 
@@ -146,12 +146,12 @@ export function AuthPage({ appConfig, onLoginSuccess }) {
       <div className="card auth-card">
         <form onSubmit={handleSubmit}>
           <label className="label">邮箱</label>
-          <input className="input" type="email" placeholder="your@email.com" value={email}
-            onChange={(e) => setEmail(e.target.value)} required />
+          <input className="input" type="email" placeholder="请输入邮箱" value={email}
+            onChange={(e) => setEmail(e.target.value)} />
 
           <label className="label">密码</label>
-          <input className="input" type="password" placeholder="••••••••" value={password}
-            onChange={(e) => setPassword(e.target.value)} required />
+          <input className="input" type="password" placeholder="请输入密码" value={password}
+            onChange={(e) => setPassword(e.target.value)} />
 
           {needEmailCode && (
             <>
@@ -163,7 +163,6 @@ export function AuthPage({ appConfig, onLoginSuccess }) {
                   placeholder="请输入验证码"
                   value={emailCode}
                   onChange={(e) => setEmailCode(e.target.value)}
-                  required
                 />
                 <button
                   type="button"
